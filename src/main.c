@@ -389,7 +389,7 @@ int main(int argc, char *argv[])
 	WRITELIT("\"\n");
 	WRITELIT("#include <string.h> // strncmp\n");
 	/*	WRITELIT("enum wanted_tags lookup_wanted(const char* tag) {\n"); */
-	WRITELIT("\n};\nenum ");
+	WRITELIT("enum ");
 	WRITESTR(prefix);
 	WRITELIT(" ");
 	WRITELIT("lookup_");
