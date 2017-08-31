@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
 			}
 			WRITELIT("\", ");
 			writei(num);
-			WRITELIT(")\n");
+			WRITELIT("))\n");
 		};
 		indent(level+1);
 		WRITELIT("return ");
