@@ -229,6 +229,11 @@ int main(int argc, char *argv[])
 	}
 	//dumptrie(&root,0);
 
+	bool noupper = getenv("noupper")!=NULL;
+	char TOUPPER(char c) {
+		if(noupper) return c;
+		return toupper(c);
+	}
 
 	void dump_memcmp(char* dest, struct trie* cur, int level, int len) {
 		if(cur->nsubs == 0) {
@@ -248,7 +253,7 @@ int main(int argc, char *argv[])
 			writei(pos++);
 			WRITELIT("] == '");
 			WRITE(&place->c,1);
-			*dest++ = place->c;
+			*dest++ = TOUPPER(place->c);
 			WRITELIT("'");
 			place = &place->subs[0];
 		}
@@ -275,7 +280,7 @@ int main(int argc, char *argv[])
 			int num = 0;
 			while(cur && cur->c) {
 				WRITE(&cur->c,1);
-				*dest++ = cur->c;
+				*dest++ = TOUPPER(cur->c);
 				++num;
 				cur = &cur->subs[0];
 			}
@@ -311,7 +316,7 @@ int main(int argc, char *argv[])
 
 		for(i=0;i<cur->nsubs;++i) {
 			char c = cur->subs[i].c;
-			*dest = c;
+			*dest = TOUPPER(c);
 			indent(level);
 			WRITELIT("case '");
 			if(c) {
@@ -332,7 +337,7 @@ int main(int argc, char *argv[])
 			} else {
 				int len = 0;
 				if (nobranches(&cur->subs[i],&len)) {
-					*dest = cur->subs[i].c;
+					*dest = TOUPPER(cur->subs[i].c);
 					dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
 				} else {
 					dump_code(dest+1, &cur->subs[i],level+1);
@@ -354,7 +359,7 @@ int main(int argc, char *argv[])
 		for(;i<cur->nsubs;++i) {
 			char c = cur->subs[i].c;
 			if(c) {
-				*dest = c;
+				*dest = TOUPPER(c);
 				dump_enum(dest+1,&cur->subs[i]);
 			} else {
 				WRITELIT(",\n\t");
