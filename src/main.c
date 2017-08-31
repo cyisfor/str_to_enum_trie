@@ -394,7 +394,7 @@ int main(int argc, char *argv[])
 	WRITELIT(" ");
 	WRITELIT("lookup_");
 	WRITESTR(prefix);
-	WRITELIT("(const char* s);\n");
+	WRITELIT("(const char* s) {\n");
 
 	dump_code(s, &root, 0);
 	WRITELIT("}\n");
