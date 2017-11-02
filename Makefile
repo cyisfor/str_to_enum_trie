@@ -1,5 +1,7 @@
 LINK=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
+all: main example
+
 main: o/main.o src/mystring.h
 	$(LINK)
 
