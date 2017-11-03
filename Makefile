@@ -13,16 +13,26 @@ main: o/main.o src/mystring.h
 o/%.o: src/%.c  | o
 	$(COMPILE)
 
+o/%.o: o/%.c  | o
+	$(COMPILE)
+
 o:
 	mkdir $@
 
-o/%.gen.o: o/%.gen.c
-	$(COMPILE)
+
+example: o/example.o o/foo.trie.o
+
+o/example.o: o/foo.trie.h
+o/example.o: CFLAGS+=-I
+
 
 define TRIE
 export nocase noupper prefix enum
+
 o/$(name).trie.c: o/$(name).trie.h $(source) main
 	file=$@ ./main
+o/$(name).trie.h: ;
+
 undefine nocase noupper prefix enum name source
 endef
 
@@ -32,9 +42,4 @@ noupper=1
 nocase=1
 prefix=foo
 enum=bar
-$(TRIE)
-
-o/%.gen.c: o/%.gen.h %
-	file=$@ prefix=
-
-example: o/example.o o/foo.gen.o
+$(eval $(TRIE))

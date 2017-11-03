@@ -1,6 +1,6 @@
 int main(int argc, char *argv[])
 {
-#include "o/foo.gen.h"
+#include "o/foo.trie.h"
 	enum foo foo = lookup_foo(argv[1]);
 	switch(foo) {
 	case foo_BAR:
