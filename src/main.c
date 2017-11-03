@@ -306,21 +306,25 @@ int main(int argc, char *argv[])
 		if(nullterm == false) {
 			WRITELIT("if(length == ");
 			writei(level-1,level);
-			WRITELIT(") {");
+			WRITELIT(")");
 			newline();
 			++level;
 
 			bool terminated = false;
+			bool nonterminated = false;
+			/* don't output a switch statement if NONE of them are nonterminated */
 			for(i=0;i<cur->nsubs;++i) {
 				if(cur->subs[i].c == '\0') {
 					terminated = true;
-					break;
+				} else {
+					nonterminated = true;
 				}
+				if(terminated && nonterminated) break;
 			}
 
 			WRITELIT("return ");
 			if(terminated) {
-				WRITE_ENUM(dest,dest-s);
+				WRITE_ENUM(s,dest-s);
 			} else {
 				WRITE_UNKNOWN;
 			}
@@ -329,8 +333,7 @@ int main(int argc, char *argv[])
 			--level;
 			newline();
 						
-			WRITELIT("}");
-			newline();
+			if(nonterminated == false) return;
 		}
 		WRITELIT("switch (s[");
 		writei(level-1, level);
@@ -351,15 +354,18 @@ int main(int argc, char *argv[])
 				WRITELIT("':");
 				newline();
 			}
-			onecase(c);
 			if(!c) {
-				WRITELIT("\treturn ");
-				WRITESTR(enum_prefix);
-				WRITELIT("_");
-				WRITE(s,dest-s);
-				WRITELIT(";");
-				newline();
+				if(nullterm == true) {
+					onecase(c);
+					WRITELIT("\treturn ");
+					WRITESTR(enum_prefix);
+					WRITELIT("_");
+					WRITE(s,dest-s);
+					WRITELIT(";");
+					newline();
+				}
 			} else {
+				onecase(c);
 				if(nocase) {
 					if (c != toupper(c)) {
 						onecase(toupper(c));
