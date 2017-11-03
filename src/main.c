@@ -130,6 +130,8 @@ int main(int argc, char *argv[])
 	} else {
 		filename.l = strlen(filename.s);
 	}
+
+	bool nocase = NULL==getenv("nocase");
 	
 	struct trie root = {};
 
@@ -329,6 +331,7 @@ int main(int argc, char *argv[])
 			char c = cur->subs[i].c;
 			*dest = TOUPPER(c);
 			indent(level);
+			// two cases for lower and upper sometimes
 			WRITELIT("case '");
 			if(c) {
 				WRITE(&c,1);
