@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 	}
 
 #define WRITE(a,len) writething(a, len, level)
-#define WRITELIT(a) WRITE(LITLEN(a))
+#define WRITELIT(a) WRITE(a,sizeof(a)-1)
 #define WRITESTR(ss) WRITE(ss.s,ss.l)
 #define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITE(tail,tlen)
 #define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 	void newline(void) {
 		neednewline = true;
 	}
-	void writei(int i) {
+	void writei(int i, int level) {
 		char buf[0x100];
 		WRITE(buf, snprintf(buf,0x100,"%d",i));
 	}
@@ -266,7 +266,7 @@ int main(int argc, char *argv[])
 		void oneshortcut_onecase(char c, const char* prefix, size_t plen) {
 			if(plen) WRITE(prefix,plen);
 			WRITELIT("s[");
-			writei(pos);
+			writei(pos, level);
 			WRITELIT("] == '");
 			WRITE(&c,1);
 			*dest = TOUPPER(place->c);
@@ -288,7 +288,7 @@ int main(int argc, char *argv[])
 		case 2:
 			oneshortcut(NULL,0);
 			WRITELIT(")");
-			newline()
+			newline();
 			break;
 		case 3:
 			oneshortcut(NULL,0);
@@ -308,7 +308,7 @@ int main(int argc, char *argv[])
 			if(nocase)
 				WRITELIT("case");
 			WRITELIT("cmp(&s[");
-			writei(level);
+			writei(level, level);
 			WRITELIT("],\"");
 			int num = 0;
 			while(cur && cur->c) {
@@ -318,7 +318,7 @@ int main(int argc, char *argv[])
 				cur = &cur->subs[0];
 			}
 			WRITELIT("\", ");
-			writei(num);
+			writei(num, level);
 			WRITELIT("))");
 			newline();
 		};
@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
 		size_t i;
 		indent(level);
 		WRITELIT("switch (s[");
-		writei(level);
+		writei(level, level);
 		WRITELIT("]) {");
 		newline();
 
@@ -408,13 +408,13 @@ int main(int argc, char *argv[])
 		newline();
 	}
 
-	void dump_enum(char* dest, struct trie* cur) {
+	void dump_enum(char* dest, struct trie* cur, int level) {
 		int i = 0;
 		for(;i<cur->nsubs;++i) {
 			char c = cur->subs[i].c;
 			if(c) {
 				*dest = TOUPPER(c);
-				dump_enum(dest+1,&cur->subs[i]);
+				dump_enum(dest+1,&cur->subs[i],level+1);
 			} else {
 				WRITELIT(",\n\t");
 				WRITE_ENUM(s,dest-s);
@@ -425,12 +425,13 @@ int main(int argc, char *argv[])
 	char tname[] = ".tmpXXXXXX";
 	fd = mkstemp(tname);
 	assert(fd >= 0);
+	int level = 0;
 
 	WRITELIT("enum ");
 	WRITESTR(prefix);
 	WRITELIT (" {\n\t");
 	WRITE_UNKNOWN;
-	dump_enum(s, &root);
+	dump_enum(s, &root, level);
 	WRITELIT("\n};\nenum ");
 	WRITESTR(prefix);
 	WRITELIT(" ");
@@ -455,7 +456,7 @@ int main(int argc, char *argv[])
 	WRITESTR(prefix);
 	WRITELIT("(const char* s) {\n");
 
-	dump_code(s, &root, 0);
+	dump_code(s, &root, level);
 	WRITELIT("}\n");
 	close(fd);
 	filename.s[filename.l-1] = 'c'; // blah.gen.c
