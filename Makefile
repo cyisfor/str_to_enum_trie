@@ -42,4 +42,5 @@ noupper=1
 nocase=1
 prefix=foo
 enum=bar
+undefine null_terminated
 $(eval $(TRIE))

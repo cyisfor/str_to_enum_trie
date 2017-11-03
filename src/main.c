@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h> // snprintf
 #include <fcntl.h> // open O_*
+#include <libgen.h> // basename
 
 string needenv(const char* name) {
 	const char* val = getenv(name);
@@ -296,14 +297,14 @@ int main(int argc, char *argv[])
 		size_t i;
 		if(nullterm == false) {
 			WRITELIT("if(length == ");
-			writei(level);
+			writei(level,level);
 			WRITELIT(") {");
 			newline();
 			++level;
 
 			bool terminated = false;
 			for(i=0;i<cur->nsubs;++i) {
-				if(cur->sub[i].c == '\0') {
+				if(cur->subs[i].c == '\0') {
 					terminated = true;
 					break;
 				}
@@ -315,9 +316,11 @@ int main(int argc, char *argv[])
 			} else {
 				WRITE_UNKNOWN;
 			}
-			WRITELIT(";")
+			WRITELIT(";");
 			
 			--level;
+			newline();
+						
 			WRITELIT("}");
 			newline();
 		}
@@ -420,7 +423,9 @@ int main(int argc, char *argv[])
 	fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
 	assert(fd >= 0);
 	WRITELIT("#include \"");
-	WRITESTR(filename);
+	string base = { .s = basename(filename.s) };
+	base.l = strlen(base.s);
+	WRITESTR(base);
 	WRITELIT("\"");
 	newline();
 	WRITELIT("#include <string.h> // strncmp");
