@@ -254,6 +254,14 @@ int main(int argc, char *argv[])
 			newline();
 			return;
 		}
+		if(nullterm == false) {
+			WRITELIT("if(length != ");
+			writei(level,level);
+			WRITELIT(") { return ");
+			WRITE_UNKNOWN;
+			WRITELIT("; }");
+			newline();
+		}
 		WRITELIT("if(0==strn");
 		if(nocase)
 			WRITELIT("case");
@@ -297,7 +305,7 @@ int main(int argc, char *argv[])
 		size_t i;
 		if(nullterm == false) {
 			WRITELIT("if(length == ");
-			writei(level,level);
+			writei(level-1,level);
 			WRITELIT(") {");
 			newline();
 			++level;
