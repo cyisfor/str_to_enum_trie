@@ -1,16 +1,19 @@
+#include <stdio.h>
+#include "o/foo.trie.h"
+
 int main(int argc, char *argv[])
 {
-#include "o/foo.trie.h"
 	enum foo foo = lookup_foo(argv[1]);
 	switch(foo) {
-	case foo_BAR:
+	case bar_bar:
 		puts("foobar");
 		break;
-	case foo_BAZ:
+	case bar_baz:
 		puts("bazz");
 		break;
-	case foo_UNKNOWN:
-		printf("ehunno! what is %s?",argv[1]);
+	case bar_UNKNOWN:
+		printf("ehunno! what is %s?\n",argv[1]);
+		break;
 	default:
 		printf("We should really handle %d(%s)\n",foo,argv[1]);
 	};

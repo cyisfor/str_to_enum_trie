@@ -21,16 +21,17 @@ o:
 
 
 example: o/example.o o/foo.trie.o
+	$(LINK)
 
-o/example.o: o/foo.trie.h
-o/example.o: CFLAGS+=-I
+o/example.o: o/foo.trie.c
+o/example.o: CFLAGS+=-I.
 
 
 define TRIE
 export nocase noupper prefix enum
 
-o/$(name).trie.c: o/$(name).trie.h $(source) main
-	file=$@ ./main
+o/$(name).trie.c: o/$(name).trie.h $(source) main | o
+	(cd o && file=$(name).trie.c ../main) <$(source)
 o/$(name).trie.h: ;
 
 undefine nocase noupper prefix enum name source
