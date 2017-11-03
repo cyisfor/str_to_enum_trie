@@ -243,6 +243,7 @@ int main(int argc, char *argv[])
 		return toupper(c);
 	}
 
+	// no branches, so just memcmp
 	void dump_memcmp(char* dest, struct trie* cur, int level, int len) {
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
@@ -251,80 +252,26 @@ int main(int argc, char *argv[])
 			newline();
 			return;
 		}
-		WRITELIT("if(");
-		struct trie* place = cur;
-		int pos = level;
-		void oneshortcut_onecase(char c) {
-			WRITELIT("s[");
-			writei(pos, level);
-			WRITELIT("] == '");
-			WRITE(&c,1);
-			*dest = TOUPPER(place->c);
-			WRITELIT("'");
+		WRITELIT("if(0==strn");
+		if(nocase)
+			WRITELIT("case");
+		// start at the address of character 'level'
+		WRITELIT("cmp(&s[");
+		writei(level-1, level);
+		WRITELIT("],\"");
+		int num = 0;
+		// add each character to the string, increasing num
+		while(cur && cur->c) {
+			WRITE(&cur->c,1);
+			*dest++ = TOUPPER(cur->c);
+			++num;
+			cur = &cur->subs[0];
 		}
-
-		void oneshortcut_or(char a, char b) {
-			WRITELIT("(");
-			oneshortcut_onecase(a);
-			WRITELIT(" || ");
-			oneshortcut_onecase(b);
-			WRITELIT(")");
-		} 
-		void oneshortcut(void) {
-			if(nocase) {
-				char c = place->c;
-				if(c != tolower(c)) {
-					oneshortcut_or(c,tolower(c));
-				} else if(c != toupper(c)) {
-					oneshortcut_or(c,toupper(c));
-				} else {
-					oneshortcut_onecase(c);
-				}
-			}
-			++pos; ++dest;
-			place = &place->subs[0];
-		}
-		switch(len) {
-		case 2:
-			oneshortcut();
-			WRITELIT(")");
-			newline();
-			break;
-		case 3:
-			oneshortcut();
-			WRITELIT(" && ");
-			oneshortcut();
-			WRITELIT(")");
-			newline();
-			break;
-		case 4:
-			oneshortcut();
-			WRITELIT(" && ");
-			oneshortcut();
-			WRITELIT(" && ");
-			oneshortcut();
-			WRITELIT(")");
-			newline();
-			break;
-		default:
-			WRITELIT("0==strn");
-			if(nocase)
-				WRITELIT("case");
-			WRITELIT("cmp(&s[");
-			writei(level, level);
-			WRITELIT("],\"");
-			int num = 0;
-			while(cur && cur->c) {
-				WRITE(&cur->c,1);
-				*dest++ = TOUPPER(cur->c);
-				++num;
-				cur = &cur->subs[0];
-			}
-			WRITELIT("\", ");
-			writei(num, level);
-			WRITELIT("))");
-			newline();
-		};
+		WRITELIT("\", ");
+		// only strcmp up to num characters
+		writei(num, level);
+		WRITELIT("))");
+		newline();
 		WRITELIT("return ");
 		WRITE_ENUM(s,dest-s);
 		WRITELIT(";");
@@ -347,7 +294,7 @@ int main(int argc, char *argv[])
 	void dump_code(char* dest, struct trie* cur, int level) {
 		size_t i;
 		WRITELIT("switch (s[");
-		writei(level, level);
+		writei(level-1, level);
 		WRITELIT("]) {");
 		newline();
 
@@ -367,7 +314,7 @@ int main(int argc, char *argv[])
 			}
 			onecase(c);
 			if(!c) {
-				WRITELIT("return ");
+				WRITELIT("\treturn ");
 				WRITESTR(enum_prefix);
 				WRITELIT("_");
 				WRITE(s,dest-s);
@@ -387,11 +334,13 @@ int main(int argc, char *argv[])
 				} else {
 					int len = 0;
 					if (nobranches(&cur->subs[i],&len)) {
-						*dest = TOUPPER(cur->subs[i].c);
-						dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
-					} else {
-						dump_code(dest+1, &cur->subs[i],level+1);
+						if(len > 4) {
+							*dest = TOUPPER(cur->subs[i].c);
+							dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
+							continue;
+						}
 					}
+					dump_code(dest+1, &cur->subs[i],level+1);
 				}
 			}
 		}
