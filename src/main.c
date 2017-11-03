@@ -287,7 +287,10 @@ int main(int argc, char *argv[])
 			WRITELIT(")\n");
 			break;
 		default:
-			WRITELIT("0==strncmp(&s[");
+			WRITELIT("0==strn");
+			if(nocase)
+				WRITELIT("case");
+			WRITELIT("cmp(&s[");
 			writei(level);
 			WRITELIT("],\"");
 			int num = 0;
@@ -332,13 +335,16 @@ int main(int argc, char *argv[])
 			*dest = TOUPPER(c);
 			indent(level);
 			// two cases for lower and upper sometimes
-			WRITELIT("case '");
-			if(c) {
-				WRITE(&c,1);
-			} else {
-				WRITELIT("\\0");
+			void onecase(char c) {
+				WRITELIT("case '");
+				if(c) {
+					WRITE(&c,1);
+				} else {
+					WRITELIT("\\0");
+				}
+				WRITELIT("':\n");
 			}
-			WRITELIT("':\n");
+			onecase(c);
 			if(!c) {
 				indent(level+1);
 				WRITELIT("return ");
@@ -346,7 +352,15 @@ int main(int argc, char *argv[])
 				WRITELIT("_");
 				WRITE(s,dest-s);
 				WRITELIT(";\n");
-			} else if(cur->nsubs == 0 || cur->subs[i].nsubs == 0) {
+			} else {
+				if(nocase) {
+					if (c != toupper(c)) {
+						onecase(toupper(c));
+					} else if(c != tolower(c)) {
+						onecase(tolower(c));
+					}
+				}
+				if(cur->nsubs == 0 || cur->subs[i].nsubs == 0) {
 				WRITELIT("ehunno\n");
 			} else {
 				int len = 0;
