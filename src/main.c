@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
 		filename.l = strlen(filename.s);
 	}
 
+	bool nullterm = NULL!=getenv("null_terminated");
 	bool nocase = NULL!=getenv("nocase");
 	
 	struct trie root = {};
@@ -293,6 +294,33 @@ int main(int argc, char *argv[])
 	
 	void dump_code(char* dest, struct trie* cur, int level) {
 		size_t i;
+		if(nullterm == false) {
+			WRITELIT("if(length == ");
+			writei(level);
+			WRITELIT(") {");
+			newline();
+			++level;
+
+			bool terminated = false;
+			for(i=0;i<cur->nsubs;++i) {
+				if(cur->sub[i].c == '\0') {
+					terminated = true;
+					break;
+				}
+			}
+
+			WRITELIT("return ");
+			if(terminated) {
+				WRITE_ENUM(dest,dest-s);
+			} else {
+				WRITE_UNKNOWN;
+			}
+			WRITELIT(";")
+			
+			--level;
+			WRITELIT("}");
+			newline();
+		}
 		WRITELIT("switch (s[");
 		writei(level-1, level);
 		WRITELIT("]) {");
@@ -402,7 +430,11 @@ int main(int argc, char *argv[])
 	WRITELIT(" ");
 	WRITELIT("lookup_");
 	WRITESTR(prefix);
-	WRITELIT("(const char* s) {");
+	WRITELIT("(const char* s");
+	if(nullterm == false) {
+		WRITELIT(", int length");
+	}
+	WRITELIT(") {");
 	newline();
 
 	dump_code(s, &root, level+1);

@@ -24,8 +24,7 @@ example: o/example.o o/foo.trie.o
 	$(LINK)
 
 o/example.o: o/foo.trie.c
-o/example.o: CFLAGS+=-I.
-
+o/example.o: CFLAGS+=-I. # to include o/...
 
 define TRIE
 export nocase noupper prefix enum
