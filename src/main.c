@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 		filename.l = strlen(filename.s);
 	}
 
-	bool nocase = NULL==getenv("nocase");
+	bool nocase = NULL!=getenv("nocase");
 	
 	struct trie root = {};
 
@@ -193,7 +193,14 @@ int main(int argc, char *argv[])
 
 	int fd = -1;
 
+	bool neednewline = false;
+
 	void WRITE(const char* buf, size_t n) {
+		if(neednewline) {
+			neednewline = false;
+			ssize_t res = write(fd,"\n",1);
+			indent(level);
+		}
 		ssize_t res = write(fd,buf,n);
 		assert(res == n);
 	}
@@ -211,6 +218,9 @@ int main(int argc, char *argv[])
 		}
 		WRITE(buf,level+1);
 	}
+	void newline(void) {
+		neednewline = true;
+	}
 	void writei(int i) {
 		char buf[0x100];
 		WRITE(buf, snprintf(buf,0x100,"%d",i));
@@ -223,7 +233,7 @@ int main(int argc, char *argv[])
 			WRITE(&cur->c,1);
 		else
 			WRITELIT("\\0");
-		WRITE("\n",1);
+		newline();
 		int i;
 		for(i=0;i<cur->nsubs;++i) {
 			dumptrie(&cur->subs[i],level+1);
@@ -242,7 +252,8 @@ int main(int argc, char *argv[])
 			indent(level);
 			WRITELIT("return ");
 			WRITE_ENUM(s,dest-s);
-			WRITELIT(";\n");
+			WRITELIT(";");
+			newline();
 			return;
 		}
 		indent(level);
@@ -273,18 +284,21 @@ int main(int argc, char *argv[])
 		switch(len) {
 		case 2:
 			oneshortcut(NULL,0);
-			WRITELIT(")\n");
+			WRITELIT(")");
+			newline()
 			break;
 		case 3:
 			oneshortcut(NULL,0);
 			oneshortcut(LITLEN(" && "));
-			WRITELIT(")\n");
+			WRITELIT(")");
+			newline();
 			break;
 		case 4:
 			oneshortcut(NULL,0);
 			oneshortcut(LITLEN(" && "));
 			oneshortcut(LITLEN(" && "));
-			WRITELIT(")\n");
+			WRITELIT(")");
+			newline();
 			break;
 		default:
 			WRITELIT("0==strn");
@@ -302,16 +316,18 @@ int main(int argc, char *argv[])
 			}
 			WRITELIT("\", ");
 			writei(num);
-			WRITELIT("))\n");
+			WRITELIT("))");
+			newline();
 		};
 		indent(level+1);
 		WRITELIT("return ");
 		WRITE_ENUM(s,dest-s);
-		WRITELIT(";\n");
-		indent(level);
+		WRITELIT(";");
+		newline();
 		WRITELIT("return ");
 		WRITE_UNKNOWN;
-		WRITELIT(";\n");
+		WRITELIT(";");
+		newline();
 	}
 
 	bool nobranches(struct trie* cur, int* len) {
@@ -328,7 +344,8 @@ int main(int argc, char *argv[])
 		indent(level);
 		WRITELIT("switch (s[");
 		writei(level);
-		WRITELIT("]) {\n");
+		WRITELIT("]) {");
+		newline();
 
 		for(i=0;i<cur->nsubs;++i) {
 			char c = cur->subs[i].c;
@@ -342,7 +359,8 @@ int main(int argc, char *argv[])
 				} else {
 					WRITELIT("\\0");
 				}
-				WRITELIT("':\n");
+				WRITELIT("':");
+				newline();
 			}
 			onecase(c);
 			if(!c) {
@@ -351,7 +369,8 @@ int main(int argc, char *argv[])
 				WRITESTR(enum_prefix);
 				WRITELIT("_");
 				WRITE(s,dest-s);
-				WRITELIT(";\n");
+				WRITELIT(";");
+				newline();
 			} else {
 				if(nocase) {
 					if (c != toupper(c)) {
@@ -361,25 +380,29 @@ int main(int argc, char *argv[])
 					}
 				}
 				if(cur->nsubs == 0 || cur->subs[i].nsubs == 0) {
-				WRITELIT("ehunno\n");
-			} else {
-				int len = 0;
-				if (nobranches(&cur->subs[i],&len)) {
-					*dest = TOUPPER(cur->subs[i].c);
-					dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
+					WRITELIT("ehunno");
+					newline();
 				} else {
-					dump_code(dest+1, &cur->subs[i],level+1);
+					int len = 0;
+					if (nobranches(&cur->subs[i],&len)) {
+						*dest = TOUPPER(cur->subs[i].c);
+						dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
+					} else {
+						dump_code(dest+1, &cur->subs[i],level+1);
+					}
 				}
 			}
 		}
 		indent(level);
-		WRITELIT("default:\n");
+		WRITELIT("default:");
+		newline();
 		indent(level+1);
-		WRITELIT("return ");
+		WRITELIT("\treturn ");
 		WRITE_UNKNOWN;
-		WRITELIT(";\n");
-		indent(level);
-		WRITELIT("};\n");
+		WRITELIT(";");
+		newline();
+		WRITELIT("};");
+		newline();
 	}
 
 	void dump_enum(char* dest, struct trie* cur) {
