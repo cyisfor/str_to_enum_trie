@@ -256,17 +256,24 @@ int main(int argc, char *argv[])
 		}
 		if(nullterm == false) {
 			WRITELIT("if(length != ");
-			writei(level,level);
-			WRITELIT(") { return ");
+			writei(len,level);
+			WRITELIT(")");
+			newline();
+			WRITELIT("\treturn ");
 			WRITE_UNKNOWN;
-			WRITELIT("; }");
+			WRITELIT(";");
 			newline();
 		}
-		WRITELIT("if(0==strn");
-		if(nocase)
-			WRITELIT("case");
-		// start at the address of character 'level'
-		WRITELIT("cmp(&s[");
+		if(!(nocase || nullterm)) {
+			// can use memcmp yay
+			WRITELIT("if(0==memcmp(&s[");
+		} else {
+			WRITELIT("if(0==strn");
+			if(nocase)
+				WRITELIT("case");
+			// start at the address of character 'level'
+			WRITELIT("cmp(&s[");
+		}
 		writei(level-1, level);
 		WRITELIT("],\"");
 		int num = 0;
@@ -282,7 +289,7 @@ int main(int argc, char *argv[])
 		writei(num, level);
 		WRITELIT("))");
 		newline();
-		WRITELIT("return ");
+		WRITELIT("\treturn ");
 		WRITE_ENUM(s,dest-s);
 		WRITELIT(";");
 		newline();
