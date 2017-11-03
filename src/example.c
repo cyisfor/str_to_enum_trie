@@ -1,9 +1,14 @@
-#include <stdio.h>
 #include "o/foo.trie.h"
+#include <stdio.h>
+#include <string.h>
 
 int main(int argc, char *argv[])
 {
-	enum foo foo = lookup_foo(argv[1]);
+	if(argc != 2) {
+		puts("please supply an argument.");
+		return 1;
+	}
+	enum foo foo = lookup_foo(argv[1],strlen(argv[1]));
 	switch(foo) {
 	case bar_bar:
 		puts("foobar");

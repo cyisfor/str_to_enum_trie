@@ -344,6 +344,7 @@ int main(int argc, char *argv[])
 				WRITELIT("else");
 				newline();
 				++level;
+				WRITELIT("return ");
 				WRITE_UNKNOWN;
 				WRITELIT(";");
 				newline();
@@ -444,7 +445,13 @@ int main(int argc, char *argv[])
 	WRITELIT(" ");
 	WRITELIT("lookup_");
 	WRITESTR(prefix);
-	WRITELIT("(const char* s);");
+	WRITELIT("(const char* s");
+
+	if(nullterm == false) {
+		WRITELIT(", int length");
+	}
+
+	WRITELIT(");");
 	newline();
 	
 	close(fd);
