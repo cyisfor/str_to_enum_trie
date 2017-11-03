@@ -195,13 +195,15 @@ int main(int argc, char *argv[])
 
 	bool neednewline = false;
 
-	auto void indent(int level);
-
 	void writething(const char* buf, size_t n, int level) {
 		if(neednewline) {
 			neednewline = false;
 			ssize_t res = write(fd,"\n",1);
-			indent(level);
+			if(level > 0) {
+				char* buf = alloca(level);
+				memset(buf,'\t',level);
+				write(fd,buf,level);
+			}
 		}
 		ssize_t res = write(fd,buf,n);
 		assert(res == n);
@@ -213,15 +215,6 @@ int main(int argc, char *argv[])
 #define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITE(tail,tlen)
 #define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
 	char s[0x100]; // err... 0x100 should be safe-ish.
-	void indent(int level) {
-		if(level == 0) return;
-		int i=0;
-		char* buf = alloca(level);
-		for(i=0;i<level;++i) {
-			buf[i] = '\t';
-		}
-		WRITE(buf,level+1);
-	}
 	void newline(void) {
 		neednewline = true;
 	}
@@ -271,13 +264,15 @@ int main(int argc, char *argv[])
 			WRITELIT("'");
 		}
 		void oneshortcut(const char* prefix, size_t plen) {
+			if(nocase) WRITELIT("(");
 			oneshortcut_onecase(place->c, prefix, plen);
 			if(nocase) {
 				char c = place->c;
 				if(c != tolower(c))
-					oneshortcut_onecase(tolower(c)," && ",4);
+					oneshortcut_onecase(tolower(c)," || ",4);
 				else if(c != toupper(c))
-					oneshortcut_onecase(toupper(c)," && ",4);
+					oneshortcut_onecase(toupper(c)," || ",4);
+				WRITELIT(")");
 			}
 			++pos; ++dest;
 			place = &place->subs[0];
@@ -451,7 +446,7 @@ int main(int argc, char *argv[])
 	WRITELIT("(const char* s) {");
 	newline();
 
-	dump_code(s, &root, level);
+	dump_code(s, &root, level+1);
 	WRITELIT("}\n");
 	close(fd);
 	filename.s[filename.l-1] = 'c'; // blah.gen.c
