@@ -262,16 +262,24 @@ int main(int argc, char *argv[])
 			*dest = TOUPPER(place->c);
 			WRITELIT("'");
 		}
+
+		void oneshortcut_or(char a, char b) {
+			WRITELIT("(");
+			oneshortcut_onecase(a);
+			WRITELIT(" || ");
+			oneshortcut_onecase(b);
+			WRITELIT(")");
+		} 
 		void oneshortcut(void) {
-			if(nocase) WRITELIT("(");
-			oneshortcut_onecase(place->c, prefix, plen);
 			if(nocase) {
 				char c = place->c;
-				if(c != tolower(c))
-					oneshortcut_onecase(tolower(c)," || ",4);
-				else if(c != toupper(c))
-					oneshortcut_onecase(toupper(c)," || ",4);
-				WRITELIT(")");
+				if(c != tolower(c)) {
+					oneshortcut_or(c,tolower(c));
+				} else if(c != toupper(c)) {
+					oneshortcut_or(c,toupper(c));
+				} else {
+					oneshortcut_onecase(c);
+				}
 			}
 			++pos; ++dest;
 			place = &place->subs[0];
