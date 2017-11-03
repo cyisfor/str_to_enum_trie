@@ -214,9 +214,10 @@ int main(int argc, char *argv[])
 #define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
 	char s[0x100]; // err... 0x100 should be safe-ish.
 	void indent(int level) {
+		if(level == 0) return;
 		int i=0;
 		char* buf = alloca(level);
-		for(i=0;i<=level;++i) {
+		for(i=0;i<level;++i) {
 			buf[i] = '\t';
 		}
 		WRITE(buf,level+1);
@@ -228,10 +229,9 @@ int main(int argc, char *argv[])
 		char buf[0x100];
 		WRITE(buf, snprintf(buf,0x100,"%d",i));
 	}
-
+	
 	void dumptrie(struct trie* cur, int level) {
 		if(!cur) return;
-		indent(level);
 		if(cur->c)
 			WRITE(&cur->c,1);
 		else
@@ -252,14 +252,12 @@ int main(int argc, char *argv[])
 
 	void dump_memcmp(char* dest, struct trie* cur, int level, int len) {
 		if(cur->nsubs == 0) {
-			indent(level);
 			WRITELIT("return ");
 			WRITE_ENUM(s,dest-s);
 			WRITELIT(";");
 			newline();
 			return;
 		}
-		indent(level);
 		WRITELIT("if(");
 		struct trie* place = cur;
 		int pos = level;
@@ -322,7 +320,6 @@ int main(int argc, char *argv[])
 			WRITELIT("))");
 			newline();
 		};
-		indent(level+1);
 		WRITELIT("return ");
 		WRITE_ENUM(s,dest-s);
 		WRITELIT(";");
@@ -344,7 +341,6 @@ int main(int argc, char *argv[])
 	
 	void dump_code(char* dest, struct trie* cur, int level) {
 		size_t i;
-		indent(level);
 		WRITELIT("switch (s[");
 		writei(level, level);
 		WRITELIT("]) {");
@@ -353,7 +349,6 @@ int main(int argc, char *argv[])
 		for(i=0;i<cur->nsubs;++i) {
 			char c = cur->subs[i].c;
 			*dest = TOUPPER(c);
-			indent(level);
 			// two cases for lower and upper sometimes
 			void onecase(char c) {
 				WRITELIT("case '");
@@ -367,7 +362,6 @@ int main(int argc, char *argv[])
 			}
 			onecase(c);
 			if(!c) {
-				indent(level+1);
 				WRITELIT("return ");
 				WRITESTR(enum_prefix);
 				WRITELIT("_");
@@ -396,10 +390,8 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		indent(level);
 		WRITELIT("default:");
 		newline();
-		indent(level+1);
 		WRITELIT("\treturn ");
 		WRITE_UNKNOWN;
 		WRITELIT(";");
@@ -437,7 +429,8 @@ int main(int argc, char *argv[])
 	WRITELIT(" ");
 	WRITELIT("lookup_");
 	WRITESTR(prefix);
-	WRITELIT("(const char* s);\n");
+	WRITELIT("(const char* s);");
+	newline();
 	
 	close(fd);
 	filename.s[filename.l-1] = 'h'; // blah.gen.h
@@ -446,15 +439,17 @@ int main(int argc, char *argv[])
 	assert(fd >= 0);
 	WRITELIT("#include \"");
 	WRITESTR(filename);
-	WRITELIT("\"\n");
-	WRITELIT("#include <string.h> // strncmp\n");
-	/*	WRITELIT("enum wanted_tags lookup_wanted(const char* tag) {\n"); */
+	WRITELIT("\"");
+	newline();
+	WRITELIT("#include <string.h> // strncmp");
+	newline();
 	WRITELIT("enum ");
 	WRITESTR(prefix);
 	WRITELIT(" ");
 	WRITELIT("lookup_");
 	WRITESTR(prefix);
-	WRITELIT("(const char* s) {\n");
+	WRITELIT("(const char* s) {");
+	newline();
 
 	dump_code(s, &root, level);
 	WRITELIT("}\n");
