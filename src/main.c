@@ -254,8 +254,7 @@ int main(int argc, char *argv[])
 		WRITELIT("if(");
 		struct trie* place = cur;
 		int pos = level;
-		void oneshortcut_onecase(char c, const char* prefix, size_t plen) {
-			if(plen) WRITE(prefix,plen);
+		void oneshortcut_onecase(char c) {
 			WRITELIT("s[");
 			writei(pos, level);
 			WRITELIT("] == '");
@@ -263,7 +262,7 @@ int main(int argc, char *argv[])
 			*dest = TOUPPER(place->c);
 			WRITELIT("'");
 		}
-		void oneshortcut(const char* prefix, size_t plen) {
+		void oneshortcut(void) {
 			if(nocase) WRITELIT("(");
 			oneshortcut_onecase(place->c, prefix, plen);
 			if(nocase) {
@@ -279,20 +278,23 @@ int main(int argc, char *argv[])
 		}
 		switch(len) {
 		case 2:
-			oneshortcut(NULL,0);
+			oneshortcut();
 			WRITELIT(")");
 			newline();
 			break;
 		case 3:
-			oneshortcut(NULL,0);
-			oneshortcut(LITLEN(" && "));
+			oneshortcut();
+			WRITELIT(" && ");
+			oneshortcut();
 			WRITELIT(")");
 			newline();
 			break;
 		case 4:
-			oneshortcut(NULL,0);
-			oneshortcut(LITLEN(" && "));
-			oneshortcut(LITLEN(" && "));
+			oneshortcut();
+			WRITELIT(" && ");
+			oneshortcut();
+			WRITELIT(" && ");
+			oneshortcut();
 			WRITELIT(")");
 			newline();
 			break;
