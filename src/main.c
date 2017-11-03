@@ -195,7 +195,9 @@ int main(int argc, char *argv[])
 
 	bool neednewline = false;
 
-	void WRITE(const char* buf, size_t n) {
+	auto void indent(int level);
+
+	void writething(const char* buf, size_t n, int level) {
 		if(neednewline) {
 			neednewline = false;
 			ssize_t res = write(fd,"\n",1);
@@ -205,6 +207,7 @@ int main(int argc, char *argv[])
 		assert(res == n);
 	}
 
+#define WRITE(a,len) writething(a, len, level)
 #define WRITELIT(a) WRITE(LITLEN(a))
 #define WRITESTR(ss) WRITE(ss.s,ss.l)
 #define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITE(tail,tlen)
