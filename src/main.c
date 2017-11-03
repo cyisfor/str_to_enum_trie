@@ -333,7 +333,16 @@ int main(int argc, char *argv[])
 			--level;
 			newline();
 						
-			if(nonterminated == false) return;
+			if(nonterminated == false) {
+				WRITELIT("else");
+				newline();
+				++level;
+				WRITE_UNKNOWN;
+				WRITELIT(";");
+				newline();
+				--level;
+				return;
+			}
 		}
 		WRITELIT("switch (s[");
 		writei(level-1, level);
