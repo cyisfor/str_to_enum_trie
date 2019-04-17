@@ -17,10 +17,10 @@ add_custom_command(
 	nocase=1
 	prefix=foo
 	enum=bar
-	"${CMAKE_CURRENT_BINARY_DIR}/str_to_enum_trie"
+	./str_to_enum_trie
 	<"${CMAKE_CURRENT_SOURCE_DIR}/test.example"
 	MAIN_DEPENDENCY
 	"${CMAKE_CURRENT_SOURCE_DIR}/test.example"
 	DEPENDS
-	main)
+	str_to_enum_trie)
 	
