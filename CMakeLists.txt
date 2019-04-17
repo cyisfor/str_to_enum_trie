@@ -7,6 +7,7 @@ add_executable(main
 add_executable(example
 	src/example.c
 	example.trie.c)
+target_include_directories(example PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_custom_command(
 	OUTPUT example.trie.c example.trie.h

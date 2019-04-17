@@ -1,4 +1,4 @@
-#include "o/foo.trie.h"
+#include "example.trie.h"
 #include <stdio.h>
 #include <string.h>
 

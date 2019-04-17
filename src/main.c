@@ -109,8 +109,13 @@ void insert(struct trie* root, const char* s, size_t len) {
 
 int main(int argc, char *argv[])
 {
-
+	/* What to prefix to all names, as a leading namespace thingy?
+		 BAR -> FOO_BAR
+	*/
 	const string prefix = needenv("prefix");
+	/* Should the enum constants have a special prefix?
+	 i.e. lookup_foo returns FOO_*
+	*/
 	string enum_prefix = {
 		.s = getenv("enum"),
 	};
@@ -132,7 +137,15 @@ int main(int argc, char *argv[])
 		filename.l = strlen(filename.s);
 	}
 
+	/* null terminated strings don't have a length,
+		 but are terminated with a null
+		 that's... actually not all that inefficient
+		 since we're checking each letter anyway */
 	bool nullterm = NULL!=getenv("null_terminated");
+
+	/* the check can be case sensitive, or looking up
+	 "FOO" and "foo" and "Foo" and "fOO" will all yield the same number.
+	*/
 	bool nocase = NULL!=getenv("nocase");
 	
 	struct trie root = {};
@@ -239,6 +252,10 @@ int main(int argc, char *argv[])
 	}
 	//dumptrie(&root,0);
 
+	/* noupper keeps the generated names from having uppercase in them.
+		 Normally they have uppercase stuff as that's how enums are usually
+		 named. FOO_BAR instead of foo_bar
+	*/
 	bool noupper = getenv("noupper")!=NULL;
 	char TOUPPER(char c) {
 		if(noupper) return c;
