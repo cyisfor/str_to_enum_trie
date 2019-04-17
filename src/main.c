@@ -124,6 +124,10 @@ int main(int argc, char *argv[])
 	} else {
 		enum_prefix.l = strlen(enum_prefix.s);
 	}
+	/* What file are we generating?
+	 This is actually a template, where filename.c also produces
+	 a file called filename.h
+	*/
 	mstring filename = {
 		.s = getenv("file")
 	};
