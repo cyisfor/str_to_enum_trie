@@ -9,11 +9,16 @@ add_executable(example
 	example.trie.c)
 target_include_directories(example PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
-function(str_to_enum_trie output_name source)
-	cmake_parse_arguments(PARSE_ARGV 2 O "NOUPPER;NOCASE" "PREFIX;ENUM" "")
+function(str_to_enum_trie prefix source)
+	cmake_parse_arguments(PARSE_ARGV 2 O "NOUPPER;NOCASE" "PREFIX;ENUM;OUTPUT_NAME" "")
+	if(O_OUTPUT_NAME)
+		set(output_name "${O_OUTPUT_NAME}")
+	else()
+		set(output_name "${prefix}")
+	endif()
 	get_filename_component(full_output "${output_name}" ABSOLUTE
 		BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-	set(command "file=${full_output}.c")
+	set(command "prefix=${prefix}" "file=${full_output}.c")
 	if(O_NOUPPER)
 		list(APPEND command "noupper=1")
 	endif()
@@ -40,8 +45,8 @@ function(str_to_enum_trie output_name source)
 	str_to_enum_trie)
 endfunction()
 
-str_to_enum_trie(example.trie test.example
+str_to_enum_trie(foo test.example
+	OUTPUT_NAME example.trie 
 	NOUPPER NOCASE
-	PREFIX foo
 	ENUM bar)
 
