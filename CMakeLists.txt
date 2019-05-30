@@ -4,10 +4,6 @@ project(str_to_enum_trie VERSION 0.1)
 add_executable(str_to_enum_trie
 	src/main.c)
 target_include_directories(str_to_enum_trie PRIVATE cstuff/src)
-add_executable(example
-	src/example.c
-	example.trie.c)
-target_include_directories(example PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 function(str_to_enum_trie prefix source)
 	set(options NOUPPER NOCASE NULL_TERMINATED)
@@ -48,8 +44,14 @@ function(str_to_enum_trie prefix source)
 	str_to_enum_trie)
 endfunction()
 
+if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
 str_to_enum_trie(foo test.example
 	OUTPUT_NAME example.trie 
 	NOUPPER NOCASE
 	ENUM bar)
 
+add_executable(example
+	src/example.c
+	example.trie.c)
+target_include_directories(example PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
