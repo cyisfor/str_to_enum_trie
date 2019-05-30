@@ -5,19 +5,19 @@
 #include <string.h> // memcmp
 
 typedef struct mstring {
-	char* s;
-	size_t l;
+	char* base;
+	size_t len;
 } mstring;
 
-/* because C sucks, const string str; str.s has type char* not const char*
+/* because C sucks, const string str; str.base has type char* not const char*
 	 and there's no way to conditionally make it const char*
  */
 typedef struct string {
-	const char* s;
-	size_t l;
+	const char* base;
+	size_t len;
 } string;
 
-#define STRPRINT(str) fwrite((str).s,(str).l,1,stdout);
+#define STRPRINT(str) fwrite((str).base,(str).len,1,stdout);
 
 #define LITSIZ(a) (sizeof(a)-1)
 #define LITLEN(a) a,LITSIZ(a)

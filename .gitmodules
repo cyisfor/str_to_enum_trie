@@ -1,0 +1,3 @@
+[submodule "cstuff"]
+	path = cstuff
+	url = git://github.com/cyisfor/cstuff.git
