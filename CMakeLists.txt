@@ -10,7 +10,9 @@ add_executable(example
 target_include_directories(example PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 function(str_to_enum_trie prefix source)
-	cmake_parse_arguments(PARSE_ARGV 2 O "NOUPPER;NOCASE" "PREFIX;ENUM;OUTPUT_NAME" "")
+	set(options NOUPPER NOCASE NULL_TERMINATED)
+	set(args PREFIX ENUM FILE OUTPUT_NAME)
+	cmake_parse_arguments(PARSE_ARGV 2 O "${options}" "${args}" "")
 	if(O_OUTPUT_NAME)
 		set(output_name "${O_OUTPUT_NAME}")
 	else()
@@ -31,11 +33,12 @@ function(str_to_enum_trie prefix source)
 	if(O_ENUM)
 		list(APPEND command "enum=${O_ENUM}")
 	endif()
-	list(APPEND command  "${CMAKE_CURRENT_BINARY_DIR}/str_to_enum_trie")
 	add_custom_command(
 	OUTPUT ${output_name}.c ${output_name}.h
 	COMMAND
-	${command} <"${source}"
+	${command}
+	$<TARGET_FILE:str_to_enum_trie>
+	<"${source}"
 	WORKING_DIRECTORY
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	COMMAND_EXPAND_LISTS
