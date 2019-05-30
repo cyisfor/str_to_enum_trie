@@ -18,8 +18,8 @@ string needenv(const char* name) {
 	if(val == NULL)
 		error(1,0,"please specify %s=...",name);
 	string r = {
-		.s = val,
-		.l = strlen(val)
+		.base = val,
+		.len = strlen(val)
 	};
 	return r;
 }
@@ -117,28 +117,28 @@ int main(int argc, char *argv[])
 	 i.e. lookup_foo returns FOO_*
 	*/
 	string enum_prefix = {
-		.s = getenv("enum"),
+		.base = getenv("enum"),
 	};
-	if(enum_prefix.s == NULL) {
+	if(enum_prefix.base == NULL) {
 		enum_prefix = prefix;
 	} else {
-		enum_prefix.l = strlen(enum_prefix.s);
+		enum_prefix.len = strlen(enum_prefix.base);
 	}
 	/* What file are we generating?
 	 This is actually a template, where filename.c also produces
 	 a file called filename.h
 	*/
-	mstring filename = {
-		.s = getenv("file")
+	bstring filename = {
+		.base = getenv("file")
 	};
-	if(filename.s == NULL) {
-		char* buf = malloc(prefix.l + LITSIZ(".gen.T"));
-		memcpy(buf,prefix.s,prefix.l);
-		memcpy(buf+prefix.l,LITLEN(".gen.T"));
-		filename.s = buf;
-		filename.l = prefix.l + LITSIZ(".gen.T");
+	if(filename.base == NULL) {
+		char* buf = malloc(prefix.len + LITSIZ(".gen.T"));
+		memcpy(buf,prefix.base,prefix.len);
+		memcpy(buf+prefix.len,LITLEN(".gen.T"));
+		filename.base = buf;
+		filename.len = prefix.len + LITSIZ(".gen.T");
 	} else {
-		filename.l = strlen(filename.s);
+		filename.len = strlen(filename.base);
 	}
 
 	/* null terminated strings don't have a length,
@@ -230,9 +230,9 @@ int main(int argc, char *argv[])
 
 #define WRITE(a,len) writething(a, len, level)
 #define WRITELIT(a) WRITE(a,sizeof(a)-1)
-#define WRITESTR(ss) WRITE(ss.s,ss.l)
-#define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITE(tail,tlen)
-#define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.l > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
+#define WRITESTR(ss) WRITE(ss.base,ss.len)
+#define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.len > 0) WRITELIT("_"); WRITE(tail,tlen)
+#define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.len > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
 	char s[0x100]; // err... 0x100 should be safe-ish.
 	void newline(void) {
 		neednewline = true;
@@ -476,13 +476,13 @@ int main(int argc, char *argv[])
 	newline();
 	
 	close(fd);
-	filename.s[filename.l-1] = 'h'; // blah.gen.h
-	rename(tname,filename.s);
+	filename.base[filename.len-1] = 'h'; // blah.gen.h
+	rename(tname,filename.base);
 	fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
 	assert(fd >= 0);
 	WRITELIT("#include \"");
-	string base = { .s = basename(filename.s) };
-	base.l = strlen(base.s);
+	string base = { .base = basename(filename.base) };
+	base.len = strlen(base.base);
 	WRITESTR(base);
 	WRITELIT("\"");
 	newline();
@@ -503,6 +503,6 @@ int main(int argc, char *argv[])
 	dump_code(s, &root, level+1);
 	WRITELIT("}\n");
 	close(fd);
-	filename.s[filename.l-1] = 'c'; // blah.gen.c
-	rename(tname,filename.s);
+	filename.base[filename.len-1] = 'c'; // blah.gen.c
+	rename(tname,filename.base);
 }
