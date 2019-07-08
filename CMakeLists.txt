@@ -3,7 +3,7 @@ project(str_to_enum_trie VERSION 0.1)
 
 add_executable(str_to_enum_trie
 	src/main.c)
-target_include_directories(str_to_enum_trie PRIVATE cstuff/src)
+target_include_directories(str_to_enum_trie PRIVATE cstuff)
 
 function(str_to_enum_trie prefix source)
 	set(options NOUPPER NOCASE NULL_TERMINATED)
