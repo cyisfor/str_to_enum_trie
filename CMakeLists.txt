@@ -8,6 +8,8 @@ target_include_directories(str_to_enum_trie PRIVATE cstuff)
 function(str_to_enum_trie prefix source)
 	set(options NOUPPER NOCASE NULL_TERMINATED)
 	set(args PREFIX ENUM FILE OUTPUT_NAME)
+	get_filename_component(source "${source}" ABSOLUTE BASE_DIR
+	  "${CMAKE_CURRENT_SOURCE_DIR}")
 	cmake_parse_arguments(PARSE_ARGV 2 O "${options}" "${args}" "")
 	if(O_OUTPUT_NAME)
 		set(output_name "${O_OUTPUT_NAME}")
