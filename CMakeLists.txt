@@ -1,9 +1,19 @@
 cmake_minimum_required(VERSION 3.0)
 project(str_to_enum_trie VERSION 0.1)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/add_module")
+include(AddModule)
+
+add_module(cstuff
+  GIT 874ae5456e63ea82ddba9cca149600a71be06daf
+  file:///home/repo/cstuff
+  git@github.com:cyisfor/cstuff.git
+  https://github.com/cyisfor/cstuff.git)
+
+add_cstuff()
 add_executable(str_to_enum_trie
 	src/main.c)
-target_include_directories(str_to_enum_trie PRIVATE cstuff)
+target_link_libraries(str_to_enum_trie PRIVATE cstuff)
 
 function(str_to_enum_trie prefix source)
 	set(options NOUPPER NOCASE NULL_TERMINATED)
