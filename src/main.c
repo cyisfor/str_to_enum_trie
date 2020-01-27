@@ -172,7 +172,11 @@ int main(int argc, char *argv[])
 		char* tail;
 		if(nl == NULL) {
 			// no newline at the end of file
-			tail = src + winfo.st_size-1;
+			if(hash) {
+				tail = hash-1;
+			} else {
+				tail = src + winfo.st_size-1;
+			}
 		} else {
 			if(hash && hash < nl) {
 				tail = hash-1;
@@ -259,7 +263,9 @@ int main(int argc, char *argv[])
 			dumptrie(&cur->subs[i],level+1);
 		}
 	}
+	fd = 1;
 	dumptrie(&root,0);
+	
 
 	/* noupper keeps the generated names from having uppercase in them.
 		 Normally they have uppercase stuff as that's how enums are usually
