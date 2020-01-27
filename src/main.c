@@ -263,8 +263,9 @@ int main(int argc, char *argv[])
 			dumptrie(&cur->subs[i],level+1);
 		}
 	}
-	fd = 1;
-	dumptrie(&root,0);
+	
+	/* fd = 1; */
+	/* dumptrie(&root,0); */
 	
 
 	/* noupper keeps the generated names from having uppercase in them.
