@@ -6,7 +6,8 @@ include(AddModule)
 
 add_module(cstuff
   GIT 874ae5456e63ea82ddba9cca149600a71be06daf
-  file:///home/repo/cstuff
+  file://$ENV{HOME}/code/cstuff
+  file://$ENV{HOME}/repo/cstuff
   git@github.com:cyisfor/cstuff.git
   https://github.com/cyisfor/cstuff.git)
 
