@@ -167,13 +167,18 @@ int main(int argc, char *argv[])
 	}
 	for(;;) {
 		// cur should always point to non-whitespace here.
+		char* hash = memchr(cur, '#', winfo.st_size-(cur-src));
 		char* nl = memchr(cur,'\n',winfo.st_size-(cur-src));
 		char* tail;
 		if(nl == NULL) {
 			// no newline at the end of file
 			tail = src + winfo.st_size-1;
 		} else {
-			tail = nl-1;
+			if(hash && hash < nl) {
+				tail = hash-1;
+			} else {
+				tail = nl-1;
+			}
 		}
 		if(tail != cur) {
 			while(isspace(*tail)) {
@@ -254,7 +259,7 @@ int main(int argc, char *argv[])
 			dumptrie(&cur->subs[i],level+1);
 		}
 	}
-	//dumptrie(&root,0);
+	dumptrie(&root,0);
 
 	/* noupper keeps the generated names from having uppercase in them.
 		 Normally they have uppercase stuff as that's how enums are usually
