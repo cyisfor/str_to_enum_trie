@@ -249,16 +249,20 @@ void write_enum_values(struct output* out, struct trie* root) {
 	onelevel(root);
 }
 
+void end_bracket(struct output* out) {
+	--out->level;
+	WRITELIT("}");
+	NL();
+}
+
 void if_length(struct output* out, const string op, int level) {
-	if(out->options.nullterm == false) {
-		WRITELIT("if(length ");
-		WRITESTR(op);
-		WRITELIT(" ");
-		WRITEI(level-1);
-		WRITELIT(") {");
-		NL();
-		++out->level;
-	}
+	WRITELIT("if(length ");
+	WRITESTR(op);
+	WRITELIT(" ");
+	WRITEI(level-1);
+	WRITELIT(") {");
+	NL();
+	++out->level;
 }
 
 #if 0
@@ -395,7 +399,12 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			assert(child->terminates);
 			op = LITSTR("==");
 		}
-		if_length(out, LITSTR("<"), dest->len);
+		if_length(out, LITSTR("<"), dest->len + out->index);
+		WRITELIT("return ");
+		write_unknown(out);
+		WRITELIT(";");
+		NL();
+		end_bracket(out);
 		if_memcmp(out, substringb(dest, out->index , dest->len - out->index ));
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
