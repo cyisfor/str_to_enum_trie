@@ -1,3 +1,8 @@
+/* CRAP
+I forgot that without sentinel endpoints there's no way to tell whether a trie terminates or not!
+
+ */
+
 #include "mystring.h"
 #include "record.h"
 #include "ensure.h"
@@ -70,6 +75,7 @@ const string maybeenv(const char* name) {
 
 struct trie {
 	char c;
+	bool terminates;
 	struct trie* subs;
 	size_t nsubs;
 };
@@ -122,6 +128,7 @@ void insert(struct trie* root, const char* s, size_t len) {
 			cur->c = c;
 		}
 		// final one, be sure to null it
+		cur->terminates = true;
 		cur->subs = NULL;
 		cur->nsubs = 0;
 		return;
