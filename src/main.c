@@ -430,12 +430,15 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 
 	size_t i;
 	WRITELIT("switch (s[");
-	WRITEI(out->index-1);
+	WRITEI(out->index);
 	WRITELIT("]) {");
 	NL();
 
 	for(i=0;i<cur->nsubs;++i) {
 		struct trie* sub = &cur->subs[i];
+		straddn(dest, &sub->c, 1);
+		inclevel(out);
+		
 #if 0
 		strreserve(dest, 1);
 		++dest->len;
@@ -465,8 +468,6 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			}
 		}
 		onecase(sub->c);
-		straddn(dest, &sub->c, 1);
-		inclevel(out);
 
 		if(sub->nsubs == 0) {
 			if_length(out, LITSTR("!="), dest->len);
@@ -559,10 +560,10 @@ void write_code(struct output* out) {
 	WRITELIT(") {");
 	NL();
 
-	inclevel(out);
+	++out->level;
 	bstring dest = {};
 	dump_code(out, &dest, &out->root);
-	declevel(out);
+	--out->level;
 	WRITELIT("}\n");
 }
 
