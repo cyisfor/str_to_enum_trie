@@ -11,7 +11,7 @@ add_module(cstuff
   git@github.com:cyisfor/cstuff.git
   https://github.com/cyisfor/cstuff.git)
 
-add_cstuff()
+add_cstuff(record)
 add_executable(str_to_enum_trie
 	src/main.c)
 target_link_libraries(str_to_enum_trie PRIVATE cstuff)

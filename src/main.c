@@ -1,4 +1,6 @@
 #include "mystring.h"
+#include "record.h"
+#include "ensure.h"
 
 #include <sys/mman.h> // mmap
 #include <sys/stat.h>
@@ -13,15 +15,19 @@
 #include <fcntl.h> // open O_*
 #include <libgen.h> // basename
 
-string needenv(const char* name) {
+const string needenv(const char* name) {
 	const char* val = getenv(name);
 	if(val == NULL)
-		error(1,0,"please specify %s=...",name);
-	string r = {
-		.base = val,
-		.len = strlen(val)
-	};
-	return r;
+		record(ERROR,"please specify %s=...",name);
+	return strlenstr(val);
+}
+
+const string maybeenv(const char* name) {
+	const char* val = getenv(name);
+	if(val == NULL) {
+		return (const string){};
+	}
+	return strlenstr(val);
 }
 
 /*
@@ -73,7 +79,8 @@ void sort_level(struct trie* cur) {
 
 void insert(struct trie* root, const char* s, size_t len) {
 	void visit(struct trie* cur, size_t off) {
-		char c = (off == len) ? 0 : s[off];
+		assert(off != len);
+		char c = s[off];
 
 		size_t i;
 		// TODO: make subs sorted, and binary search to insert
@@ -82,6 +89,7 @@ void insert(struct trie* root, const char* s, size_t len) {
 		for(i=0;i<cur->nsubs;++i) {
 			struct trie* sub = &cur->subs[i];
 			if(sub->c == c) {
+				if(off+1 == len) return;
 				return visit(sub,off+1);
 			}
 		}
@@ -92,8 +100,8 @@ void insert(struct trie* root, const char* s, size_t len) {
 
 		// we don't need to traverse the subs we create. just finish the string here
 		// as children.
-		for(++off;off<=len;++off) {
-			c = off == len ? 0 : s[off];
+		for(++off;off<len;++off) {
+			c = s[off];
 			cur->subs = malloc(sizeof(*cur->subs));
 			cur->nsubs = 1;
 			cur = &cur->subs[0];
@@ -107,53 +115,400 @@ void insert(struct trie* root, const char* s, size_t len) {
 	return visit(root, 0);
 }
 
-int main(int argc, char *argv[])
-{
-	/* What to prefix to all names, as a leading namespace thingy?
-		 BAR -> FOO_BAR
-	*/
-	const string prefix = needenv("prefix");
-	/* Should the enum constants have a special prefix?
-	 i.e. lookup_foo returns FOO_*
-	*/
-	string enum_prefix = {
-		.base = getenv("enum"),
-	};
-	if(enum_prefix.base == NULL) {
-		enum_prefix = prefix;
-	} else {
-		enum_prefix.len = strlen(enum_prefix.base);
+struct options {
+/* noupper keeps the generated names from having uppercase in them.
+   Normally they have uppercase stuff as that's how enums are usually
+   named. FOO_BAR instead of foo_bar
+*/
+	bool noupper; // = getenv("noupper")!=NULL;
+
+	const string enum_prefix;
+	const string prefix;
+	bstring filename;
+	
+	bool nullterm;
+	bool nocase;
+};
+
+struct output {
+	int fd;
+	int level;
+	bool neednewline;
+	struct trie root;
+	
+	struct options options;
+};
+
+void writething(struct output* self, const char* buf, size_t n) {
+	if(self->neednewline) {
+		self->neednewline = false;
+		ssize_t res = write(self->fd,"\n",1);
+		if(self->level > 0) {
+			char* buf = alloca((self->level)<<1);
+			memset(buf,' ',(self->level)<<1);
+			write(self->fd,buf,(self->level)<<1);
+		}
 	}
-	/* What file are we generating?
-	 This is actually a template, where filename.c also produces
-	 a file called filename.h
-	*/
-	bstring filename = {
-		.base = getenv("file")
-	};
-	if(filename.base == NULL) {
-		char* buf = malloc(prefix.len + LITSIZ(".gen.T"));
-		memcpy(buf,prefix.base,prefix.len);
-		memcpy(buf+prefix.len,LITLEN(".gen.T"));
-		filename.base = buf;
-		filename.len = prefix.len + LITSIZ(".gen.T");
+	ssize_t res = write(self->fd,buf,n);
+	assert(res == n);
+}
+
+void newline(struct output* self) {
+	self->neednewline = true;
+}
+
+#define NL() newline(out)
+
+void writei(struct output* out, int i) {
+	char buf[0x100];
+	writething(out, buf, snprintf(buf,0x100,"%d",i));
+}
+
+
+#define WRITE(a,len) writething(out, a, len)
+#define WRITELIT(a) WRITE(a,sizeof(a)-1)
+#define WRITESTR(ss) WRITE((ss).base,(ss).len)
+#define WRITEI(num) writei(out, num);
+
+char mytoupper(struct output* out, char c) {
+	if(!isalnum(c)) return '_'; /* only alnum allowed in identifiers */
+	if(out->options.noupper) return c;
+	return toupper(c);
+}
+#define TOUPPER(c) mytoupper(out, c)
+
+/* write an enum value like "bar_FOO" */
+void write_enum_value(struct output* out, const string tail) {
+	if(out->options.enum_prefix.len > 0) {
+		WRITESTR(out->options.enum_prefix);
+		write(out->fd, "_", 1);
+	}
+	write(out->fd, tail.base, tail.len);
+}
+
+void write_unknown(struct output* out) {
+	write_enum_value(out, LITSTR("UNKNOWN"));
+}
+
+/* dump all enum values comma separated for in the definition of the enum */
+void write_enum_values(struct output* out, struct trie* root) {
+	bstring dest = {};
+	void onelevel(struct trie* cur) {
+		int i = 0;
+		for(;i<cur->nsubs;++i) {
+			char c = cur->subs[i].c;
+			strreserve(&dest, 1);
+			dest.base[dest.len] = TOUPPER(c);
+			++dest.len;
+			if(cur->subs[i].nsubs) {
+				++out->level;
+				/* writing ALL values so don't return here. */
+				onelevel(&cur->subs[i]);
+				--out->level;
+			}  else {
+				WRITELIT(",\n\t");
+				write_enum_value(out, STRING(dest));
+			}
+			--dest.len;
+		}
+	}
+	onelevel(root);
+}
+
+// no branches, so just memcmp
+void dump_memcmp(struct output* out, bstring* dest, struct trie* cur, int len) {
+	if(cur->nsubs == 0) {
+		WRITELIT("return ");
+		write_enum_value(out, STRING(*dest));
+		WRITELIT(";");
+		NL();
+		return;
+	}
+	if(out->options.nullterm == false) {
+		WRITELIT("if(length != ");
+		WRITEI(len+1);
+		WRITELIT(")");
+		NL();
+		WRITELIT("\treturn ");
+		write_unknown(out);
+		WRITELIT(";");
+		NL();
+	}
+	if(!(out->options.nocase || out->options.nullterm)) {
+		// can use memcmp yay
+		WRITELIT("if(0==memcmp(&s[");
 	} else {
-		filename.len = strlen(filename.base);
+		WRITELIT("if(0==strn");
+		if(out->options.nocase)
+			WRITELIT("case");
+		// start at the address of character 'level'
+		WRITELIT("cmp(&s[");
+	}
+	WRITEI(out->level-1);
+	WRITELIT("],\"");
+	int num = 0;
+	// add each character to the string, increasing num
+	while(cur && cur->c) {
+		WRITE(&cur->c,1);
+		strreserve(dest, 1);
+		dest->base[dest->len] = TOUPPER(cur->c);
+		++dest->len;
+		++num;
+		cur = &cur->subs[0];
+	}
+	WRITELIT("\", ");
+	// only strcmp up to num characters
+	WRITEI(num);
+	WRITELIT("))");
+	NL();
+	WRITELIT("\treturn ");
+	write_enum_value(out, STRING(*dest));
+	WRITELIT(";");
+	NL();
+	WRITELIT("return ");
+	write_unknown(out);
+	WRITELIT(";");
+	NL();
+}
+
+bool nobranches(struct trie* cur, int* len) {
+	while(cur) {
+		if(cur->nsubs > 1) return false;
+		if(cur->nsubs == 0) return true;
+		++*len;
+		cur = &cur->subs[0];
+	}
+}
+
+void dumptrie(struct output* out, struct trie* cur) {
+	void onelevel(struct trie* cur) {
+		if(!cur) return;
+		int len = 0;
+		if(nobranches(cur, &len)) {
+			writething(out, "", 0);
+//		write(out->fd, "@", 1);
+			for(;;) {
+				write(out->fd, &cur->c, 1);
+				if(cur->nsubs == 0) break;
+				cur = &cur->subs[0];
+			}
+			NL();
+			return;
+		}
+		if(cur->c)
+			writething(out, &cur->c, 1);
+		else
+			WRITELIT("\\0");
+		NL();
+		int i;
+		++out->level;
+		for(i=0;i<cur->nsubs;++i) {
+			onelevel(&cur->subs[i]);
+		}
+		--out->level;
+	}
+	onelevel(cur);
+	writething(out,"",0);
+}
+
+	
+void dump_code(struct output* out, bstring* dest, struct trie* cur) {
+	size_t i;
+	if(out->options.nullterm == false) {
+		WRITELIT("if(length == ");
+		WRITEI(out->level-1);
+		WRITELIT(")");
+		NL();
+		++out->level;
+		WRITELIT("return ");
+		write_unknown(out);
+		WRITELIT(";");
+		NL();
+		--out->level;
+	}
+	WRITELIT("switch (s[");
+	WRITEI(out->level-1);
+	WRITELIT("]) {");
+	NL();
+	
+	for(i=0;i<cur->nsubs;++i) {
+		char c = cur->subs[i].c;
+		strreserve(dest, 1);
+		++dest->len;
+		dest->base[dest->len-1] = TOUPPER(c);
+		// two cases for lower and upper sometimes
+		void onecasederp(char c) {
+			WRITELIT("case '");
+			if(c) {
+				WRITE(&c,1);
+			} else {
+				WRITELIT("\\0");
+			}
+			WRITELIT("':");
+			NL();
+		}
+		void onecase(char c) {
+			onecasederp(c);
+			if(out->options.nocase) {
+				/* XXX: TOUPPER here?
+				 no, because this is in '' quotes*/
+				if (c != toupper(c)) {
+					onecasederp(toupper(c));
+				} else if(c != tolower(c)) {
+					onecasederp(tolower(c));
+				}
+			}
+		}
+		onecase(c);
+		if(cur->subs[i].nsubs == 0) {
+			WRITELIT("if(length != ");
+			WRITEI(out->level);
+			WRITELIT(")");
+			NL();
+			++out->level;
+			WRITELIT("return ");
+			write_unknown(out);
+			WRITELIT(";");
+			NL();
+			--out->level;
+			WRITELIT("return ");
+			write_enum_value(out, STRING(*dest));
+			WRITELIT(";");
+			NL();
+		} else {
+
+			int len = 0;
+			if (nobranches(&cur->subs[i],&len)) {
+				if(len > 4) {
+					++out->level;
+					dump_memcmp(out,
+								dest,
+								&cur->subs[i].subs[0],
+								len);
+					--out->level;
+					--dest->len;
+					continue;
+				}
+			}
+			++out->level;
+			dump_code(out, dest, &cur->subs[i]);
+			--out->level;
+		}
+		--dest->len;
+	}
+	WRITELIT("default:");
+	NL();
+	WRITELIT("\treturn ");
+	write_unknown(out);		
+	WRITELIT(";");
+	NL();
+	WRITELIT("};");
+	NL();
+}
+
+void write_header(struct output* out) {
+	WRITELIT("enum ");
+	WRITESTR(out->options.prefix);
+	WRITELIT (" {\n\t");
+	write_unknown(out);
+	write_enum_values(out, &out->root);
+	WRITELIT("\n};\nenum ");
+	WRITESTR(out->options.prefix);
+	WRITELIT(" ");
+	WRITELIT("lookup_");
+	WRITESTR(out->options.prefix);
+	WRITELIT("(const char* s");
+
+	if(out->options.nullterm == false) {
+		WRITELIT(", int length");
 	}
 
+	WRITELIT(");");
+	NL();
+}
+
+void write_code(struct output* out) {
+	WRITELIT("#include \"");
+	/* NOTE:  filename has not yet been changed to .c, still .h */
+	string base = { .base = basename(out->options.filename.base) };
+	base.len = strlen(base.base);
+	WRITESTR(base);
+	WRITELIT("\"");
+	NL();
+	WRITELIT("#include <string.h> // strncmp");
+	NL();
+	WRITELIT("enum ");
+	WRITESTR(out->options.prefix);
+	WRITELIT(" ");
+	WRITELIT("lookup_");
+	WRITESTR(out->options.prefix);
+	WRITELIT("(const char* s");
+	if(out->options.nullterm == false) {
+		WRITELIT(", int length");
+	}
+	WRITELIT(") {");
+	NL();
+
+	++out->level;
+	bstring dest = {};
+	dump_code(out, &dest, &out->root);
+	--out->level;
+	WRITELIT("}\n");
+}
+
+int main(int argc, char *argv[])
+{
+
+	struct output out = {
+		.fd = 2,
+		.root = {},
+		.options = {
+			/* noupper keeps the generated names from having uppercase in them.
+			   Normally they have uppercase stuff as that's how enums are usually
+			   named. FOO_BAR instead of foo_bar
+			*/
+			.noupper = getenv("noupper")!=NULL,
+
+			/* What to prefix to all names, as a leading namespace thingy?
+			   BAR -> FOO_BAR
+			*/
+			.prefix = needenv("prefix"),
+			/* Should the enum constants have a special prefix?
+			   i.e. lookup_foo returns FOO_*
+			*/
+			.enum_prefix = maybeenv("enum"),
+			
 	/* null terminated strings don't have a length,
 		 but are terminated with a null
 		 that's... actually not all that inefficient
 		 since we're checking each letter anyway */
-	bool nullterm = NULL!=getenv("null_terminated");
+			.nullterm = NULL!=getenv("null_terminated"),
 
 	/* the check can be case sensitive, or looking up
 	 "FOO" and "foo" and "Foo" and "fOO" will all yield the same number.
 	*/
-	bool nocase = NULL!=getenv("nocase");
-	
-	struct trie root = {};
+			.nocase = NULL!=getenv("nocase")
+		}
+	};
 
+	{
+		
+		/* What file are we generating?
+		   This is actually a template, where filename.c also produces
+		   a file called filename.h
+		*/
+		const string filename = maybeenv("file");
+		if(filename.base == NULL) {
+			straddn(&out.options.filename,
+					out.options.prefix.base,
+					out.options.prefix.len);
+			stradd(&out.options.filename,
+				   ".gen.T");
+		} else {
+			straddn(&out.options.filename, filename.base, filename.len);
+		}
+	}
+	
 	struct stat winfo;
 	assert(0==fstat(0,&winfo));
 	char* src = mmap(NULL,winfo.st_size,PROT_READ,MAP_PRIVATE,0,0);
@@ -191,7 +546,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		insert(&root, cur,tail - cur + 1);
+		insert(&out.root, cur,tail - cur + 1);
 		if(nl == NULL) break;
 		cur = nl+1;
 		if(cur == src + winfo.st_size) {
@@ -207,7 +562,7 @@ int main(int argc, char *argv[])
 	}
 	munmap(src,winfo.st_size);
 
-	sort_level(&root);
+	sort_level(&out.root);
 
 	/* aab aac abc ->
 		 a: (a1 b)
@@ -218,303 +573,23 @@ int main(int argc, char *argv[])
 		 output self, then child, self, then child
 		 -> aabaacabc add separators if at top
 	*/
-
-	int fd = -1;
-
-	bool neednewline = false;
-
-	void writething(const char* buf, size_t n, int level) {
-		if(neednewline) {
-			neednewline = false;
-			ssize_t res = write(fd,"\n",1);
-			if(level > 0) {
-				char* buf = alloca(level);
-				memset(buf,'\t',level);
-				write(fd,buf,level);
-			}
-		}
-		ssize_t res = write(fd,buf,n);
-		assert(res == n);
-	}
-
-#define WRITE(a,len) writething(a, len, level)
-#define WRITELIT(a) WRITE(a,sizeof(a)-1)
-#define WRITESTR(ss) WRITE(ss.base,ss.len)
-#define WRITE_ENUM(tail,tlen) WRITESTR(enum_prefix); if(enum_prefix.len > 0) WRITELIT("_"); WRITE(tail,tlen)
-#define WRITE_UNKNOWN WRITESTR(enum_prefix); if(enum_prefix.len > 0) WRITELIT("_"); WRITELIT("UNKNOWN")
-	char s[0x100]; // err... 0x100 should be safe-ish.
-	void newline(void) {
-		neednewline = true;
-	}
-	void writei(int i, int level) {
-		char buf[0x100];
-		WRITE(buf, snprintf(buf,0x100,"%d",i));
-	}
 	
-	void dumptrie(struct trie* cur, int level) {
-		if(!cur) return;
-		if(cur->c)
-			WRITE(&cur->c,1);
-		else
-			WRITELIT("\\0");
-		newline();
-		int i;
-		for(i=0;i<cur->nsubs;++i) {
-			dumptrie(&cur->subs[i],level+1);
-		}
-	}
+	out.fd = 2;
+	dumptrie(&out, &out.root);
 	
-	/* fd = 1; */
-	/* dumptrie(&root,0); */
-	
-
-	/* noupper keeps the generated names from having uppercase in them.
-		 Normally they have uppercase stuff as that's how enums are usually
-		 named. FOO_BAR instead of foo_bar
-	*/
-	bool noupper = getenv("noupper")!=NULL;
-	char TOUPPER(char c) {
-		if(noupper) return c;
-		return toupper(c);
-	}
-
-	// no branches, so just memcmp
-	void dump_memcmp(char* dest, struct trie* cur, int level, int len) {
-		if(cur->nsubs == 0) {
-			WRITELIT("return ");
-			WRITE_ENUM(s,dest-s);
-			WRITELIT(";");
-			newline();
-			return;
-		}
-		if(nullterm == false) {
-			WRITELIT("if(length != ");
-			writei(len,level);
-			WRITELIT(")");
-			newline();
-			WRITELIT("\treturn ");
-			WRITE_UNKNOWN;
-			WRITELIT(";");
-			newline();
-		}
-		if(!(nocase || nullterm)) {
-			// can use memcmp yay
-			WRITELIT("if(0==memcmp(&s[");
-		} else {
-			WRITELIT("if(0==strn");
-			if(nocase)
-				WRITELIT("case");
-			// start at the address of character 'level'
-			WRITELIT("cmp(&s[");
-		}
-		writei(level-1, level);
-		WRITELIT("],\"");
-		int num = 0;
-		// add each character to the string, increasing num
-		while(cur && cur->c) {
-			WRITE(&cur->c,1);
-			*dest++ = TOUPPER(cur->c);
-			++num;
-			cur = &cur->subs[0];
-		}
-		WRITELIT("\", ");
-		// only strcmp up to num characters
-		writei(num, level);
-		WRITELIT("))");
-		newline();
-		WRITELIT("\treturn ");
-		WRITE_ENUM(s,dest-s);
-		WRITELIT(";");
-		newline();
-		WRITELIT("return ");
-		WRITE_UNKNOWN;
-		WRITELIT(";");
-		newline();
-	}
-
-	bool nobranches(struct trie* cur, int* len) {
-		while(cur) {
-			if(cur->nsubs > 1) return false;
-			if(cur->nsubs == 0) return true;
-			++*len;
-			cur = &cur->subs[0];
-		}
-	}
-	
-	void dump_code(char* dest, struct trie* cur, int level) {
-		size_t i;
-		if(nullterm == false) {
-			WRITELIT("if(length == ");
-			writei(level-1,level);
-			WRITELIT(")");
-			newline();
-			++level;
-
-			bool terminated = false;
-			bool nonterminated = false;
-			/* don't output a switch statement if NONE of them are nonterminated */
-			for(i=0;i<cur->nsubs;++i) {
-				if(cur->subs[i].c == '\0') {
-					terminated = true;
-				} else {
-					nonterminated = true;
-				}
-				if(terminated && nonterminated) break;
-			}
-
-			WRITELIT("return ");
-			if(terminated) {
-				WRITE_ENUM(s,dest-s);
-			} else {
-				WRITE_UNKNOWN;
-			}
-			WRITELIT(";");
-			
-			--level;
-			newline();
-						
-			if(nonterminated == false) {
-				WRITELIT("else");
-				newline();
-				++level;
-				WRITELIT("return ");
-				WRITE_UNKNOWN;
-				WRITELIT(";");
-				newline();
-				--level;
-				return;
-			}
-		}
-		WRITELIT("switch (s[");
-		writei(level-1, level);
-		WRITELIT("]) {");
-		newline();
-
-		for(i=0;i<cur->nsubs;++i) {
-			char c = cur->subs[i].c;
-			*dest = TOUPPER(c);
-			// two cases for lower and upper sometimes
-			void onecase(char c) {
-				WRITELIT("case '");
-				if(c) {
-					WRITE(&c,1);
-				} else {
-					WRITELIT("\\0");
-				}
-				WRITELIT("':");
-				newline();
-			}
-			if(!c) {
-				if(nullterm == true) {
-					onecase(c);
-					WRITELIT("\treturn ");
-					WRITESTR(enum_prefix);
-					WRITELIT("_");
-					WRITE(s,dest-s);
-					WRITELIT(";");
-					newline();
-				}
-			} else {
-				onecase(c);
-				if(nocase) {
-					if (c != toupper(c)) {
-						onecase(toupper(c));
-					} else if(c != tolower(c)) {
-						onecase(tolower(c));
-					}
-				}
-				if(cur->nsubs == 0 || cur->subs[i].nsubs == 0) {
-					WRITELIT("ehunno");
-					newline();
-				} else {
-					int len = 0;
-					if (nobranches(&cur->subs[i],&len)) {
-						if(len > 4) {
-							*dest = TOUPPER(cur->subs[i].c);
-							dump_memcmp(dest+1,&cur->subs[i].subs[0],level+1,len);
-							continue;
-						}
-					}
-					dump_code(dest+1, &cur->subs[i],level+1);
-				}
-			}
-		}
-		WRITELIT("default:");
-		newline();
-		WRITELIT("\treturn ");
-		WRITE_UNKNOWN;
-		WRITELIT(";");
-		newline();
-		WRITELIT("};");
-		newline();
-	}
-
-	void dump_enum(char* dest, struct trie* cur, int level) {
-		int i = 0;
-		for(;i<cur->nsubs;++i) {
-			char c = cur->subs[i].c;
-			if(c) {
-				*dest = TOUPPER(c);
-				dump_enum(dest+1,&cur->subs[i],level+1);
-			} else {
-				WRITELIT(",\n\t");
-				WRITE_ENUM(s,dest-s);
-			}
-		}
-	}
-
 	char tname[] = ".tmpXXXXXX";
-	fd = mkstemp(tname);
-	assert(fd >= 0);
-	int level = 0;
-
-	WRITELIT("enum ");
-	WRITESTR(prefix);
-	WRITELIT (" {\n\t");
-	WRITE_UNKNOWN;
-	dump_enum(s, &root, level);
-	WRITELIT("\n};\nenum ");
-	WRITESTR(prefix);
-	WRITELIT(" ");
-	WRITELIT("lookup_");
-	WRITESTR(prefix);
-	WRITELIT("(const char* s");
-
-	if(nullterm == false) {
-		WRITELIT(", int length");
-	}
-
-	WRITELIT(");");
-	newline();
+	out.fd = mkstemp(tname);
+	assert(out.fd >= 0);
+	write_header(&out);
+	close(out.fd);
 	
-	close(fd);
-	filename.base[filename.len-1] = 'h'; // blah.gen.h
-	rename(tname,filename.base);
-	fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
-	assert(fd >= 0);
-	WRITELIT("#include \"");
-	string base = { .base = basename(filename.base) };
-	base.len = strlen(base.base);
-	WRITESTR(base);
-	WRITELIT("\"");
-	newline();
-	WRITELIT("#include <string.h> // strncmp");
-	newline();
-	WRITELIT("enum ");
-	WRITESTR(prefix);
-	WRITELIT(" ");
-	WRITELIT("lookup_");
-	WRITESTR(prefix);
-	WRITELIT("(const char* s");
-	if(nullterm == false) {
-		WRITELIT(", int length");
-	}
-	WRITELIT(") {");
-	newline();
-
-	dump_code(s, &root, level+1);
-	WRITELIT("}\n");
-	close(fd);
-	filename.base[filename.len-1] = 'c'; // blah.gen.c
-	rename(tname,filename.base);
+	out.options.filename.base[out.options.filename.len-1] = 'h'; // blah.gen.h
+	rename(tname,out.options.filename.base);
+	
+	out.fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
+	assert(out.fd >= 0);
+	write_code(&out);
+	close(out.fd);
+	out.options.filename.base[out.options.filename.len-1] = 'c'; // blah.gen.c
+	rename(tname,out.options.filename.base);
 }
