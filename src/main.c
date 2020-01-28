@@ -463,22 +463,17 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		}
 		onecase(c);
 		if(cur->subs[i].nsubs == 0) {
-			WRITELIT("if(length != ");
-			WRITEI(out->index+1);
-			WRITELIT(")");
-			NL();
-			++out->level;
+			if_length(out, LITSTR("!="), dest->len);
 			WRITELIT("return ");
 			write_unknown(out);
 			WRITELIT(";");
 			NL();
-			--out->level;
+			end_bracket(out);
 			WRITELIT("return ");
 			write_enum_value(out, STRING(*dest));
 			WRITELIT(";");
 			NL();
 		} else {
-
 			int len = 0;
 			if (nobranches(&cur->subs[i],&len)) {
 				if(len > 4) {
@@ -490,20 +485,16 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 						NL();
 					} else {
 						/* 									&cur->subs[i].subs[0], */
-#if 0
-						dump_memcmp(out,
-									substringb(dest,0,len),
-									LITSTR("!="));
-#endif
+						if_memcmp(out, substringb(dest,0,len));
 					}
 					declevel(out);
 					--dest->len;
 					continue;
 				}
 			}
-			++out->level;
+			inclevel(out);
 			dump_code(out, dest, &cur->subs[i]);
-			--out->level;
+			declevel(out);
 		}
 		--dest->len;
 	}
@@ -670,10 +661,11 @@ int main(int argc, char *argv[])
 		while(isspace(*cur)) {
 			if(++cur == src + winfo.st_size) {
 				// trailing whitespace
-				break;
+				goto BREAK_FOR;
 			}
 		}
 	}
+BREAK_FOR:
 	munmap(src,winfo.st_size);
 
 	sort_level(&out.root);
