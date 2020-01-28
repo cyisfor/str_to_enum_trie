@@ -329,6 +329,9 @@ void dumptrie(struct output* out, struct trie* cur) {
 	void onelevel(struct trie* cur) {
 		if(!cur) return;
 		int len = 0;
+		if(cur->terminates) {
+			write(out->fd, "$", 1);
+		}
 		if(nobranches(cur, &len)) {
 			writething(out, "", 0);
 //		write(out->fd, "@", 1);
@@ -666,7 +669,7 @@ int main(int argc, char *argv[])
 		 -> aabaacabc add separators if at top
 	*/
 
-#if 0
+#if 1
 	out.fd = 2;
 	dumptrie(&out, &out.root);
 #endif
