@@ -573,9 +573,11 @@ int main(int argc, char *argv[])
 		 output self, then child, self, then child
 		 -> aabaacabc add separators if at top
 	*/
-	
+
+#if 0	
 	out.fd = 2;
 	dumptrie(&out, &out.root);
+#endif
 	
 	char tname[] = ".tmpXXXXXX";
 	out.fd = mkstemp(tname);
