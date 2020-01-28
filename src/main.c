@@ -98,8 +98,9 @@ void sort_level(struct trie* cur) {
 }
 
 void insert(struct trie* root, const char* s, size_t len) {
-	record(INFO, "Checking %.*s",
-		   (int)len, s);
+#if DEBUGGING	
+	record(INFO, "Checking %.*s", (int)len, s);
+#endif
 	void visit(struct trie* cur, size_t off) {
 		assert(off != len);
 		char c = s[off];
@@ -163,15 +164,40 @@ struct output {
 	struct options options;
 };
 
-void inclevel(struct output* out) {
+#if DEBUGGING	
+void debugdest(struct output* out, bstring* dest) {
+	size_t i;
+	bstring res = {};
+	for(i=0;i<dest->len;++i) {
+		if(i == out->index) {
+			straddn(&res, LITLEN("→"));
+		}
+		straddn(&res, &dest->base[i], 1);
+	}	
+	record(INFO, "Dest %.*s",
+		   STRING_FOR_PRINTF(res));
+	strclear(&res);
+}
+#endif
+
+void inclevel(bstring* dest, struct trie* cur, struct output* out) {
 	++out->level;
 	++out->index;
-	record(INFO, "GOing up to %d", out->index);
+	straddn(dest, &cur->c, 1);
+#if DEBUGGING
+	record(INFO, "GOing up to %d:%d added %c", out->index, dest->len, cur->c);
+	debugdest(out, dest);
+#endif
 }
-void declevel(struct output* out) {
+void declevel(bstring* dest, struct output* out) {
+	assert(dest->len > 0);
+	--dest->len;
 	--out->level;
 	--out->index;
-	record(INFO, "GOing down to %d", out->index);
+#if DEBUGGING	
+	record(INFO, "GOing down to %d:%d removed %c", out->index, dest->len, dest->base[dest->len]);
+	debugdest(out, dest);
+#endif
 }
 
 void writething(struct output* self, const char* buf, size_t n) {
@@ -206,24 +232,49 @@ void writei(struct output* out, int i) {
 #define WRITESLICE(ss) WRITE((ss).str->base + (ss).start, (ss).len)
 #define WRITEI(num) writei(out, num);
 
+char toident(char c) {
+	/* only alnum allowed in identifiers */
+	if(!isalnum(c)) return '_';
+	return c;
+}
+
 char mytoupper(struct output* out, char c) {
-	if(!isalnum(c)) return '_'; /* only alnum allowed in identifiers */
+	c = toident(c);
 	if(out->options.noupper) return c;
 	return toupper(c);
 }
 #define TOUPPER(c) mytoupper(out, c)
 
 /* write an enum value like "bar_FOO" */
-void write_enum_value(struct output* out, const string tail) {
+void write_enum_value(struct output* out, const string name) {
 	if(out->options.enum_prefix.len > 0) {
 		WRITESTR(out->options.enum_prefix);
 		write(out->fd, "_", 1);
 	}
-	write(out->fd, tail.base, tail.len);
+	int i;
+	char buf[name.len];
+	for(i=0;i<name.len;++i) {
+		buf[i] = TOUPPER(name.base[i]);
+	}
+	write(out->fd, buf, name.len);
+}
+
+void write_return_enum_value(struct output* out, const string name) {
+	WRITELIT("return ");
+	write_enum_value(out, name);
+	WRITELIT(";");
+	NL();
 }
 
 void write_unknown(struct output* out) {
 	write_enum_value(out, LITSTR("UNKNOWN"));
+}
+
+void write_return_unknown(struct output* out) {
+	WRITELIT("return ");
+	write_unknown(out);
+	WRITELIT(";");
+	NL();
 }
 
 /* dump all enum values comma separated for in the definition of the enum */
@@ -236,15 +287,16 @@ void write_enum_values(struct output* out, struct trie* root) {
 			strreserve(&dest, 1);
 			dest.base[dest.len] = TOUPPER(c);
 			++dest.len;
+			if(cur->subs[i].terminates) {
+				WRITELIT(",\n\t");
+				write_enum_value(out, STRING(dest));
+			}
 			if(cur->subs[i].nsubs) {
 				++out->level;
 				/* writing ALL values so don't return here. */
 				onelevel(&cur->subs[i]);
 				--out->level;
-			}  else {
-				WRITELIT(",\n\t");
-				write_enum_value(out, STRING(dest));
-			}
+			} 
 			--dest.len;
 		}
 	}
@@ -263,37 +315,14 @@ void if_length(struct output* out, const string op, int level) {
 	WRITESTR(op);
 	WRITELIT(" ");
 	WRITEI(level);
-	WRITELIT(") {");
+	WRITELIT(")");
+}
+
+void begin_bracket(struct output* out) {
+	WRITELIT("{");
 	NL();
 	++out->level;
-}
-
-#if 0
-void addthingy() {
-		int num = 0;
-	// add each character to the string, increasing num
-	while(cur && cur->c) {
-		WRITE(&cur->c,1);
-		++dest.len;
-		if(dest.start + dest.len >= dest.str->len) {
-			strreserve(dest.str, dest.start + dest.len + 1);
-			dest.str->len = dest.len + dest.start;
-		}
-		dest.str->base[dest.start+dest.len-1] = TOUPPER(cur->c);
-		++num;
-		cur = &cur->subs[0];
-	}
-}
-	WRITELIT("\treturn ");
-	write_enum_value(out, STRING(*dest.str));
-	WRITELIT(";");
-	NL();
-	WRITELIT("return ");
-	write_unknown(out);
-	WRITELIT(";");
-	NL();
-
-#endif
+}	
 
 // no branches, so just memcmp
 void if_memcmp(struct output* out, struct slice dest) {
@@ -307,16 +336,14 @@ void if_memcmp(struct output* out, struct slice dest) {
 		// start at the address of character 'level'
 		WRITELIT("cmp(&s[");
 	}
-	WRITEI(out->index-1);
+	WRITEI(out->index);
 	WRITELIT("],\"");
 
 	WRITESLICE(dest);
 	WRITELIT("\", ");
 	// only strcmp up to num characters
 	WRITEI(dest.len);
-	WRITELIT(")) {");
-	++out->level;
-	NL();
+	WRITELIT("))");
 }
 
 bool nobranches(struct trie* cur, int* len) {
@@ -352,7 +379,7 @@ void dumptrie(struct output* out, struct trie* cur) {
 			WRITELIT("\\0");
 		if(cur->terminates) {
 			writething(out, "$", 1);
-		}		
+		}
 		NL();
 		int i;
 		++out->level;
@@ -365,67 +392,173 @@ void dumptrie(struct output* out, struct trie* cur) {
 	writething(out,"",0);
 }
 
-struct trie* first_branch(bstring* dest, struct trie* cur, int* num) {
+struct trie* first_branch(struct output* out, bstring* dest, struct trie* cur, int* num) {
 	if(!cur) return NULL;
 	if(cur->nsubs == 0) return NULL;
-	*num = 1;
+	*num = 0;
+	size_t oldlen = dest->len;
 	while(cur->nsubs == 1) {
-		straddn(dest, &cur->c, 1);
 		cur = &cur->subs[0];
+		straddn(dest, &cur->c, 1);
 		++*num;
 	}
+#if DEBUGGING		
+	record(INFO, "going up branch %d:%d added %d %.*s",
+		   out->index,
+		   dest->len,
+		   *num,
+		   (int)dest->len - oldlen,
+		   dest->base + oldlen
+		);
+#endif	
+	/* don't increase out->index yet... */
 	return cur;
 }
 
+void inc_nonbranches(struct output* out, bstring* dest, int num) {
+#if DEBUGGING		
+	record(INFO, "finish branch GOing up %d", num);
+#endif
+	assert(out->index + num <= dest->len);
+	out->index += num;
+#if DEBUGGING		
+	debugdest(out, dest);
+#endif
+}
 
-void dump_code(struct output* out, bstring* dest, struct trie* cur) {
-	record(INFO, "Index dump code %d %.*s", out->index,
+void dec_nonbranches(struct output* out, bstring* dest, int num) {
+#if DEBUGGING		
+	record(INFO, "GOing down %d removing %.*s", num,
+		   dest->len - (num ),
+		   dest->base + (num - 1 )
+		);
+#endif
+	assert(dest->len >= num);
+	out->index -= num;
+	/* this is gonna not work... out->index needs to be -1 here? */
+	dest->len -= num;
+#if DEBUGGING		
+	debugdest(out, dest);
+#endif
+}
+
+
+void write_branch(struct output* out, bstring* dest, struct trie* cur) {
+#if DEBUGGING		
+	record(INFO, "Index dump branch %d %.*s", out->index,
 		STRING_FOR_PRINTF(*dest));
+#endif
 	/* first, try to check branches with many common prefixes
 	 i.e. aaaaone, aaaatwo, aaaathree etc*/
 	int num = 0;
-	struct trie* child = first_branch(dest, cur, &num);
-
-	if(num > 2) {
-		int i;
-		string op;
-
-		if(child->nsubs > 0) {
-			op = LITSTR(">=");
-		} else {
-			assert(child->terminates);
-			op = LITSTR("==");
+	/* inclevel several times... */
+	cur = first_branch(out, dest, cur, &num);
+	switch(num) {
+	case 0:
+		break;
+	case 1:
+	case 2:
+	case 3:
+	case 4: {
+		/* we only need logic for the 1 non-branch */
+		WRITELIT("if(");
+		bool first = true;
+		int i = 0;
+		void writeone(int i, char c) {
+			WRITELIT("s[");
+			WRITEI(i);
+			WRITELIT("] == '");
+			write(out->fd, &c, 1);
+			WRITELIT("'");
 		}
-		record(INFO, "ugh %d %.*s %d", dest->len,
-			   STRING_FOR_PRINTF(*dest),
-			   out->index);
+		for(i=0;i<num;++i) {
+			if(first) {
+				first = false;
+			} else {
+				WRITELIT(" && ");
+			}
+			int offset = out->index+i;
+			char c = dest->base[offset];
+			if(out->options.nocase && c != toupper(c)) {
+				WRITELIT("(");
+				writeone(offset, c);
+				WRITELIT(" || ");
+				writeone(offset, toupper(c));
+				WRITELIT(")");
+			} else {
+				writeone(offset, c);
+			}
+		}					
+
+		WRITELIT(")");
+		begin_bracket(out);
+		if(cur->terminates) {
+			if_length(out, LITSTR("=="), dest->len );
+			++out->level;
+			NL();
+			write_return_enum_value(out, STRING(*dest));
+			--out->level;
+		}
+		if(cur->nsubs == 0) {
+			write_return_unknown(out);
+			end_bracket(out);
+			inc_nonbranches(out, dest, num);
+			dec_nonbranches(out, dest, num);
+			return;
+		}
 		if_length(out, LITSTR("<"), dest->len );
+		++out->level;
+		NL();		
+		write_return_unknown(out);
+		--out->level;
+		inc_nonbranches(out, dest, num);
+	}
+		break;
+	default: {
+		// if(num > 3)
+		int i;
+		if_length(out, LITSTR("<"), dest->len );
+		++out->level;
+		NL();
 		WRITELIT("return ");
 		write_unknown(out);
 		WRITELIT(";");
 		NL();
-		end_bracket(out);
+		--out->level;
+
 		assert(out->index <= dest->len );
 		if_memcmp(out, substringb(dest, out->index, dest->len - out->index));
+		begin_bracket(out);
+		/* if(dest->len == num) ? */
+		inc_nonbranches(out, dest, num);
+	}
+	};
+
+	if(cur->nsubs > 0) {
 		if(cur->terminates) {
 			if_length(out, LITSTR("=="), dest->len );
-			WRITELIT("return ");
-			write_enum_value(out, STRING(*dest));
-			WRITELIT(";");
-			end_bracket(out);
+			++out->level;
+			write_return_enum_value(out, STRING(*dest));
+			--out->level;
 		}
-		if(cur->nsubs == 0) {
-			WRITELIT("return ");
-			write_unknown(out);
-			WRITELIT(";");
-			end_bracket(out);
-			return;
+	} else if(cur->nsubs == 0) {
+		if(cur->terminates) {
+			write_return_enum_value(out, STRING(*dest));
+		} else {
+			write_return_unknown(out);
 		}
-		record(INFO, "GOing up %d", num);
-		out->index += num;
-		cur = child;
+		end_bracket(out);
+		dec_nonbranches(out, dest, num);
+		return;
 	}
 
+
+	/*
+	  We finished sneaking down the prefix non-branches, if possible.
+	  Now we have to do branch logic, for each of the cur->nsubs
+	 */
+
+	assert(cur->nsubs >= 2);
 	size_t i;
 	WRITELIT("switch (s[");
 	WRITEI(out->index);
@@ -434,9 +567,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 
 	for(i=0;i<cur->nsubs;++i) {
 		struct trie* sub = &cur->subs[i];
-		straddn(dest, &sub->c, 1);
-		inclevel(out);
-		
+
 		// two cases for lower and upper sometimes
 		void onecasederp(char c) {
 			WRITELIT("case '");
@@ -451,7 +582,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		void onecase(char c) {
 			onecasederp(c);
 			if(out->options.nocase) {
-				/* XXX: TOUPPER here?
+				/* XXX: TOUPPE R here?
 				 no, because this is in '' quotes*/
 				if (c != toupper(c)) {
 					onecasederp(toupper(c));
@@ -461,37 +592,33 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			}
 		}
 		onecase(sub->c);
+		inclevel(dest, sub, out);
 
 		if(sub->nsubs == 0) {
 			if_length(out, LITSTR("!="), dest->len);
-			WRITELIT("return ");
-			write_unknown(out);
-			WRITELIT(";");
+			++out->level;
 			NL();
-			end_bracket(out);
-			WRITELIT("return ");
-			write_enum_value(out, STRING(*dest));
-			WRITELIT(";");
-			NL();
+			write_return_unknown(out);
+			--out->level;
+			write_return_enum_value(out, STRING(*dest));
 		} else {
 			int len = 0;
-			if (nobranches(sub,&len) && len > 4) {
+			if (nobranches(sub,&len) && len == 0) {
 				++out->level;
 				if(sub->nsubs == 0) {
-					WRITELIT("return ");
-					write_enum_value(out, STRING(*dest));
-					WRITELIT(";");
-					NL();
+					write_return_enum_value(out, STRING(*dest));					
 				} else {
 					/* 									&cur->subs[i].subs[0], */
 					WRITELIT("DERP");
 				}
 			} else {
-				dump_code(out, dest, sub);
+				write_branch(out, dest, sub);
 			}
 		}
-		declevel(out);
-		--dest->len;
+		NL();
+		WRITELIT("break;");
+		NL();
+		declevel(dest, out);
 	}
 	WRITELIT("default:");
 	NL();
@@ -501,10 +628,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	NL();
 	WRITELIT("};");
 	NL();
-	if(num > 2) {
-		record(INFO, "GOing down %d", num);
-		out->index -= num;
+	if(num != 0) {
+		end_bracket(out);
 	}
+	dec_nonbranches(out, dest, num);
 }
 
 void write_header(struct output* out) {
@@ -552,7 +679,7 @@ void write_code(struct output* out) {
 
 	++out->level;
 	bstring dest = {};
-	dump_code(out, &dest, &out->root);
+	write_branch(out, &dest, &out->root);
 	--out->level;
 	WRITELIT("}\n");
 }
@@ -676,12 +803,12 @@ BREAK_FOR:
 		 -> aabaacabc add separators if at top
 	*/
 
-#if 1
+#if 0
 	out.fd = 2;
 	dumptrie(&out, &out.root);
 #endif
 
-#if 0
+
 	char tname[] = "tmpXXXXXX";
 	out.fd = open(tname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	assert(out.fd >= 0);
@@ -693,11 +820,8 @@ BREAK_FOR:
 
 	out.fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
 	assert(out.fd >= 0);
-#endif	
 	write_code(&out);
-#if 0	
 	close(out.fd);
 	out.options.filename.base[out.options.filename.len-1] = 'c'; // blah.gen.c
 	rename(tname,out.options.filename.base);
-#endif
 }
