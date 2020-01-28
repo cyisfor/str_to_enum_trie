@@ -401,7 +401,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			op = LITSTR("==");
 		}
 		record(INFO, "ugh %d %d", dest->len, out->index);
-		if_length(out, LITSTR("<"), dest->len + out->index - 1);
+		if_length(out, LITSTR("<"), dest->len );
 		WRITELIT("return ");
 		write_unknown(out);
 		WRITELIT(";");
@@ -409,7 +409,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		end_bracket(out);
 		if_memcmp(out, substringb(dest, out->index , dest->len - out->index ));
 		if(cur->terminates) {
-			if_length(out, LITSTR("=="), dest->len + out->index - 1);
+			if_length(out, LITSTR("=="), dest->len );
 			WRITELIT("return ");
 			write_enum_value(out, STRING(*dest));
 			WRITELIT(";");
@@ -515,6 +515,9 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	NL();
 	WRITELIT("};");
 	NL();
+	if(num > 2) {
+		out->index -= num;
+	}
 }
 
 void write_header(struct output* out) {
