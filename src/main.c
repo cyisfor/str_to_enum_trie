@@ -166,10 +166,12 @@ struct output {
 void inclevel(struct output* out) {
 	++out->level;
 	++out->index;
+	record(INFO, "GOing up to %d", out->index);
 }
 void declevel(struct output* out) {
 	--out->level;
 	--out->index;
+	record(INFO, "GOing down to %d", out->index);
 }
 
 void writething(struct output* self, const char* buf, size_t n) {
@@ -363,11 +365,12 @@ void dumptrie(struct output* out, struct trie* cur) {
 	writething(out,"",0);
 }
 
-struct trie* first_branch(struct trie* cur, int* num) {
+struct trie* first_branch(bstring* dest, struct trie* cur, int* num) {
 	if(!cur) return NULL;
 	if(cur->nsubs == 0) return NULL;
 	*num = 1;
 	while(cur->nsubs == 1) {
+		straddn(dest, &cur->c, 1);
 		cur = &cur->subs[0];
 		++*num;
 	}
@@ -381,16 +384,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	/* first, try to check branches with many common prefixes
 	 i.e. aaaaone, aaaatwo, aaaathree etc*/
 	int num = 0;
-	struct trie* child = first_branch(cur, &num);
+	struct trie* child = first_branch(dest, cur, &num);
 
 	if(num > 2) {
 		int i;
-
-		for(i=0;i<num-1;++i) {
-			assert(cur->nsubs == 1);
-			cur = &cur->subs[0];
-			straddn(dest, &cur->c, 1);
-		}
 		string op;
 
 		if(child->nsubs > 0) {
@@ -426,6 +423,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		}
 		record(INFO, "GOing up %d", num);
 		out->index += num;
+		cur = child;
 	}
 
 	size_t i;
@@ -504,6 +502,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	WRITELIT("};");
 	NL();
 	if(num > 2) {
+		record(INFO, "GOing down %d", num);
 		out->index -= num;
 	}
 }
@@ -682,6 +681,7 @@ BREAK_FOR:
 	dumptrie(&out, &out.root);
 #endif
 
+#if 0
 	char tname[] = "tmpXXXXXX";
 	out.fd = open(tname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	assert(out.fd >= 0);
@@ -693,8 +693,11 @@ BREAK_FOR:
 
 	out.fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
 	assert(out.fd >= 0);
+#endif	
 	write_code(&out);
+#if 0	
 	close(out.fd);
 	out.options.filename.base[out.options.filename.len-1] = 'c'; // blah.gen.c
 	rename(tname,out.options.filename.base);
+#endif
 }
