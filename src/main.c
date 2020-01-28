@@ -250,6 +250,7 @@ void write_enum_values(struct output* out, struct trie* root) {
 }
 
 void end_bracket(struct output* out) {
+	NL();
 	--out->level;
 	WRITELIT("}");
 	NL();
@@ -406,6 +407,13 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		NL();
 		end_bracket(out);
 		if_memcmp(out, substringb(dest, out->index , dest->len - out->index ));
+		if(cur->terminates) {
+			if_length(out, LITSTR("=="), dest->len + out->index);
+			WRITELIT("return ");
+			write_enum_value(out, STRING(*dest));
+			WRITELIT(";");
+			end_bracket(out);
+		}
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
 			write_enum_value(out, STRING(*dest));
