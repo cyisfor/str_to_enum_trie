@@ -263,6 +263,7 @@ void dump_memcmp(struct output* out, bstring* dest, struct trie* cur, int len) {
 	NL();
 	WRITELIT("\treturn ");
 	write_enum_value(out, STRING(*dest));
+	dest->len -= num;
 	WRITELIT(";");
 	NL();
 	WRITELIT("return ");
