@@ -317,22 +317,20 @@ void if_memcmp(struct output* out, struct slice dest) {
 	NL();
 }
 
-bool nobranches(bstring* dest, struct trie* cur, int* len) {
+bool nobranches(struct trie* cur, int* len) {
 	while(cur) {
 		if(cur->nsubs > 1) return false;
 		if(cur->nsubs == 0) return true;
 		++*len;
-		straddn(dest, &cur->c, 1);
 		cur = &cur->subs[0];
 	}
 }
 
 void dumptrie(struct output* out, struct trie* cur) {
-	bstring dest = {};
 	void onelevel(struct trie* cur) {
 		if(!cur) return;
 		int len = 0;
-		if(nobranches(&dest, cur, &len)) {
+		if(nobranches(cur, &len)) {
 			writething(out, "", 0);
 //		write(out->fd, "@", 1);
 			for(;;) {
@@ -477,7 +475,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			NL();
 		} else {
 			int len = 0;
-			if (nobranches(dest, sub, &len)) {
+			if (nobranches(sub,&len)) {
 				if(len > 4) {
 					++out->level;
 					if(sub->nsubs == 0) {
@@ -498,6 +496,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			inclevel(out);
 			dump_code(out, dest, sub);
 			declevel(out);
+			--dest->len;
 		}
 		--dest->len;
 	}
