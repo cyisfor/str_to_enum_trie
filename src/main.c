@@ -276,8 +276,8 @@ void addthingy() {
 #endif
 
 // no branches, so just memcmp
-void dump_memcmp(struct output* out, struct slice dest, struct trie* cur, const string op) {
-	check_length(out, op, out->level);
+void dump_memcmp(struct output* out, struct slice dest, const string op) {
+	check_length(out, op, dest.len);
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
 		WRITELIT("if(0==memcmp(&s[");
@@ -288,19 +288,17 @@ void dump_memcmp(struct output* out, struct slice dest, struct trie* cur, const 
 		// start at the address of character 'level'
 		WRITELIT("cmp(&s[");
 	}
-	WRITESLICE(dest);
 	WRITEI(out->index-1);
 	WRITELIT("],\"");
 
+	WRITESLICE(dest);
 	WRITELIT("\", ");
 	// only strcmp up to num characters
-	WRITEI(num);
+	WRITEI(dest.len);
 	WRITELIT("))");
 	NL();
 	WRITELIT("\treturn ");
 	write_enum_value(out, STRING(*dest.str));
-	dest.str->len -= num;
-	dest.len -= num;
 	WRITELIT(";");
 	NL();
 	WRITELIT("return ");
@@ -384,8 +382,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			op = LITSTR("!=");
 		}
 		dump_memcmp(out,
-					substringb(dest, out->index + 1, dest->len - out->index - 1),
-					cur,
+					substringb(dest, out->index , dest->len - out->index ),
 					LITSTR("!="));
 		if(!cur) return;
 		if(cur->nsubs == 0) {
@@ -463,9 +460,9 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 						WRITELIT(";");
 						NL();
 					} else {
+						/* 									&cur->subs[i].subs[0], */
 						dump_memcmp(out,
 									substringb(dest,0,len),
-									&cur->subs[i].subs[0],
 									LITSTR("!="));
 					}
 					declevel(out);
