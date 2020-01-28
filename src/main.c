@@ -399,7 +399,9 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			assert(child->terminates);
 			op = LITSTR("==");
 		}
-		record(INFO, "ugh %d %d", dest->len, out->index);
+		record(INFO, "ugh %d %.*s %d", dest->len,
+			   STRING_FOR_PRINTF(*dest),
+			   out->index);
 		if_length(out, LITSTR("<"), dest->len );
 		WRITELIT("return ");
 		write_unknown(out);
@@ -422,6 +424,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			end_bracket(out);
 			return;
 		}
+		record(INFO, "GOing up %d", num);
 		out->index += num;
 	}
 
@@ -687,7 +690,7 @@ BREAK_FOR:
 	dumptrie(&out, &out.root);
 #endif
 
-	char tname[] = ".tmpXXXXXX";
+	char tname[] = "tmpXXXXXX";
 	out.fd = open(tname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	assert(out.fd >= 0);
 	write_header(&out);
