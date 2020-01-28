@@ -249,7 +249,7 @@ void write_enum_values(struct output* out, struct trie* root) {
 	onelevel(root);
 }
 
-void check_length(struct output* out, const string op, int level, const string* const enumvalue) {
+void if_length(struct output* out, const string op, int level, const string* const enumvalue) {
 	if(out->options.nullterm == false) {
 		WRITELIT("if(length ");
 		WRITESTR(op);
@@ -289,9 +289,7 @@ void addthingy() {
 #endif
 
 // no branches, so just memcmp
-void dump_memcmp(struct output* out, struct slice dest, const string op) {
-	inclevel(out);
-	check_length(out, op, dest.len + out->index, NULL);
+void if_memcmp(struct output* out, struct slice dest) {
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
 		WRITELIT("if(0==memcmp(&s[");
@@ -310,6 +308,7 @@ void dump_memcmp(struct output* out, struct slice dest, const string op) {
 	// only strcmp up to num characters
 	WRITEI(dest.len);
 	WRITELIT(")) {");
+	inclevel(out);
 	NL();
 }
 
@@ -390,14 +389,11 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		straddn(dest, &cur->c, 1);
 		string op;
 
-		check_length(out, LITSTR("=="), out->index+num,
-					 cur->terminates ? (const string*)dest : NULL);
-
-
 		if(child->nsubs > 0) {
-			op = LITSTR("<");
+			op = LITSTR(">=");
 		} else {
-			op = LITSTR("!=");
+			assert(child->terminates);
+			op = LITSTR("==");
 		}
 		dump_memcmp(out,
 					substringb(dest, out->index , dest->len - out->index ),
