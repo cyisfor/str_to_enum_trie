@@ -304,8 +304,9 @@ void dump_memcmp(struct output* out, struct slice dest, const string op) {
 	WRITELIT("\", ");
 	// only strcmp up to num characters
 	WRITEI(dest.len);
-	WRITELIT("))");
+	WRITELIT(")) {");
 	NL();
+	++out->level;
 }
 
 bool nobranches(struct trie* cur, int* len) {
@@ -386,12 +387,14 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		dump_memcmp(out,
 					substringb(dest, out->index , dest->len - out->index ),
 					op);
-		if(!cur) return;
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
 			write_enum_value(out, STRING(*dest));
 			WRITELIT(";");
 			NL();
+			WRITELIT("}");
+			NL();
+			--out->level;
 			return;
 		}
 		out->index += num;
