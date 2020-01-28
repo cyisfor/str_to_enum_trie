@@ -255,18 +255,9 @@ void check_length(struct output* out, const string op, int level, const string* 
 		WRITESTR(op);
 		WRITELIT(" ");
 		WRITEI(level-1);
-		WRITELIT(")");
+		WRITELIT(") {");
 		NL();
 		++out->level;
-		WRITELIT("return ");
-		if(enumvalue) {
-			write_enum_value(out, *enumvalue);
-		} else {
-			write_unknown(out);
-		}
-		WRITELIT(";");
-		NL();
-		--out->level;
 	}
 }
 
@@ -387,8 +378,6 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	 i.e. aaaaone, aaaatwo, aaaathree etc*/
 	int num = 0;
 	struct trie* child = first_branch(cur, &num);
-	check_length(out, LITSTR("=="), out->index-1,
-				 cur->terminates ? (const string*)dest : NULL);
 
 	if(num > 2) {
 		int i;
@@ -400,6 +389,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		}
 		straddn(dest, &cur->c, 1);
 		string op;
+
+		check_length(out, LITSTR("=="), out->index+num,
+					 cur->terminates ? (const string*)dest : NULL);
+
 
 		if(child->nsubs > 0) {
 			op = LITSTR("<");
