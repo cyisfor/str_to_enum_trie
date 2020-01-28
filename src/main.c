@@ -317,20 +317,22 @@ void if_memcmp(struct output* out, struct slice dest) {
 	NL();
 }
 
-bool nobranches(struct trie* cur, int* len) {
+bool nobranches(bstring* dest, struct trie* cur, int* len) {
 	while(cur) {
 		if(cur->nsubs > 1) return false;
 		if(cur->nsubs == 0) return true;
 		++*len;
+		straddn(dest, &cur->c, 1);
 		cur = &cur->subs[0];
 	}
 }
 
 void dumptrie(struct output* out, struct trie* cur) {
+	bstring dest = {};
 	void onelevel(struct trie* cur) {
 		if(!cur) return;
 		int len = 0;
-		if(nobranches(cur, &len)) {
+		if(nobranches(&dest, cur, &len)) {
 			writething(out, "", 0);
 //		write(out->fd, "@", 1);
 			for(;;) {
@@ -387,11 +389,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		int i;
 
 		for(i=0;i<num-1;++i) {
-			straddn(dest, &cur->c, 1);
 			assert(cur->nsubs == 1);
 			cur = &cur->subs[0];
+			straddn(dest, &cur->c, 1);
 		}
-		straddn(dest, &cur->c, 1);
 		string op;
 
 		if(child->nsubs > 0) {
@@ -407,10 +408,8 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		WRITELIT(";");
 		NL();
 		end_bracket(out);
-		if(out->index >= dest->len - 1) {
-			return;
-		}
-		if_memcmp(out, substringb(dest, out->index, dest->len - out->index));
+		assert(out->index <= dest->len );
+		if_memcmp(out, substringb(dest, out->index - 1, dest->len - out->index + 1));
 		if(cur->terminates) {
 			if_length(out, LITSTR("=="), dest->len );
 			WRITELIT("return ");
@@ -478,7 +477,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			NL();
 		} else {
 			int len = 0;
-			if (nobranches(sub,&len)) {
+			if (nobranches(dest, sub, &len)) {
 				if(len > 4) {
 					++out->level;
 					if(sub->nsubs == 0) {
