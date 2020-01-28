@@ -273,11 +273,20 @@ void addthingy() {
 		cur = &cur->subs[0];
 	}
 }
+	WRITELIT("\treturn ");
+	write_enum_value(out, STRING(*dest.str));
+	WRITELIT(";");
+	NL();
+	WRITELIT("return ");
+	write_unknown(out);
+	WRITELIT(";");
+	NL();
+
 #endif
 
 // no branches, so just memcmp
 void dump_memcmp(struct output* out, struct slice dest, const string op) {
-	check_length(out, op, dest.len);
+	check_length(out, op, dest.len + out->index);
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
 		WRITELIT("if(0==memcmp(&s[");
@@ -296,14 +305,6 @@ void dump_memcmp(struct output* out, struct slice dest, const string op) {
 	// only strcmp up to num characters
 	WRITEI(dest.len);
 	WRITELIT("))");
-	NL();
-	WRITELIT("\treturn ");
-	write_enum_value(out, STRING(*dest.str));
-	WRITELIT(";");
-	NL();
-	WRITELIT("return ");
-	write_unknown(out);
-	WRITELIT(";");
 	NL();
 }
 
@@ -376,14 +377,15 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		}
 		straddn(dest, &cur->c, 1);
 		string op;
-		if(cur->nsubs > 0) {
+
+		if(child->nsubs > 0) {
 			op = LITSTR("<");
 		} else {
 			op = LITSTR("!=");
 		}
 		dump_memcmp(out,
 					substringb(dest, out->index , dest->len - out->index ),
-					LITSTR("!="));
+					op);
 		if(!cur) return;
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
