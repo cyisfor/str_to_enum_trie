@@ -353,11 +353,11 @@ void dumptrie(struct output* out, struct trie* cur) {
 		}		
 		NL();
 		int i;
-		inclevel(out);
+		++out->level;
 		for(i=0;i<cur->nsubs;++i) {
 			onelevel(&cur->subs[i]);
 		}
-		declevel(out);
+		--out->level;
 	}
 	onelevel(cur);
 	writething(out,"",0);
@@ -407,7 +407,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		WRITELIT(";");
 		NL();
 		end_bracket(out);
-		if_memcmp(out, substringb(dest, out->index , dest->len - out->index ));
+		if(out->index >= dest->len - 1) {
+			return;
+		}
+		if_memcmp(out, substringb(dest, out->index - 1, dest->len - out->index + 1 ));
 		if(cur->terminates) {
 			if_length(out, LITSTR("=="), dest->len );
 			WRITELIT("return ");
@@ -477,7 +480,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			int len = 0;
 			if (nobranches(&cur->subs[i],&len)) {
 				if(len > 4) {
-					inclevel(out);
+					++out->level;
 					if(cur->nsubs == 0) {
 						WRITELIT("return ");
 						write_enum_value(out, STRING(*dest));
@@ -487,7 +490,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 						/* 									&cur->subs[i].subs[0], */
 						if_memcmp(out, substringb(dest,0,len));
 					}
-					declevel(out);
+					--out->level;
 					--dest->len;
 					continue;
 				}
