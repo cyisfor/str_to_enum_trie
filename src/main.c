@@ -260,7 +260,7 @@ void if_length(struct output* out, const string op, int level) {
 	WRITELIT("if(length ");
 	WRITESTR(op);
 	WRITELIT(" ");
-	WRITEI(level-1);
+	WRITEI(level);
 	WRITELIT(") {");
 	NL();
 	++out->level;
@@ -313,7 +313,7 @@ void if_memcmp(struct output* out, struct slice dest) {
 	// only strcmp up to num characters
 	WRITEI(dest.len);
 	WRITELIT(")) {");
-	inclevel(out);
+	++out->level;
 	NL();
 }
 
@@ -400,7 +400,8 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			assert(child->terminates);
 			op = LITSTR("==");
 		}
-		if_length(out, LITSTR("<"), dest->len + out->index);
+		record(INFO, "ugh %d %d", dest->len, out->index);
+		if_length(out, LITSTR("<"), dest->len + out->index - 1);
 		WRITELIT("return ");
 		write_unknown(out);
 		WRITELIT(";");
@@ -408,7 +409,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		end_bracket(out);
 		if_memcmp(out, substringb(dest, out->index , dest->len - out->index ));
 		if(cur->terminates) {
-			if_length(out, LITSTR("=="), dest->len + out->index);
+			if_length(out, LITSTR("=="), dest->len + out->index - 1);
 			WRITELIT("return ");
 			write_enum_value(out, STRING(*dest));
 			WRITELIT(";");
@@ -416,15 +417,11 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		}
 		if(cur->nsubs == 0) {
 			WRITELIT("return ");
-			write_enum_value(out, STRING(*dest));
+			write_unknown(out);
 			WRITELIT(";");
-			NL();
-			WRITELIT("}");
-			NL();
-			declevel(out);
+			end_bracket(out);
 			return;
 		}
-		declevel(out);
 		out->index += num;
 	}
 
