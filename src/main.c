@@ -462,6 +462,9 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			}
 		}
 		onecase(sub->c);
+		straddn(dest, &sub->c, 1);
+		inclevel(out);
+
 		if(sub->nsubs == 0) {
 			if_length(out, LITSTR("!="), dest->len);
 			WRITELIT("return ");
@@ -485,19 +488,16 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 						NL();
 					} else {
 						/* 									&cur->subs[i].subs[0], */
-						if_memcmp(out, substringb(dest,0,len));
+						WRITELIT("DERP");
 					}
 					--out->level;
 					--dest->len;
 					continue;
 				}
 			}
-			straddn(dest, &sub->c, 1);
-			inclevel(out);
 			dump_code(out, dest, sub);
-			declevel(out);
-			--dest->len;
 		}
+		declevel(out);
 		--dest->len;
 	}
 	WRITELIT("default:");
@@ -688,7 +688,7 @@ BREAK_FOR:
 #endif
 
 	char tname[] = ".tmpXXXXXX";
-	out.fd = mkstemp(tname);
+	out.fd = open(tname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	assert(out.fd >= 0);
 	write_header(&out);
 	close(out.fd);
