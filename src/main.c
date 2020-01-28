@@ -249,7 +249,7 @@ void write_enum_values(struct output* out, struct trie* root) {
 	onelevel(root);
 }
 
-void check_length(struct output* out, const string op, int level) {
+void check_length(struct output* out, const string op, int level, const string* const enumvalue) {
 	if(out->options.nullterm == false) {
 		WRITELIT("if(length ");
 		WRITESTR(op);
@@ -259,7 +259,11 @@ void check_length(struct output* out, const string op, int level) {
 		NL();
 		++out->level;
 		WRITELIT("return ");
-		write_unknown(out);
+		if(enumvalue) {
+			write_enum_value(out, *enumvalue);
+		} else {
+			write_unknown(out);
+		}
 		WRITELIT(";");
 		NL();
 		--out->level;
@@ -295,7 +299,7 @@ void addthingy() {
 
 // no branches, so just memcmp
 void dump_memcmp(struct output* out, struct slice dest, const string op) {
-	check_length(out, op, dest.len + out->index);
+	check_length(out, op, dest.len + out->index, NULL);
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
 		WRITELIT("if(0==memcmp(&s[");
@@ -415,7 +419,8 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		out->index += num;
 	}
 
-	check_length(out, LITSTR("=="), out->index-1);
+	check_length(out, LITSTR("=="), out->index-1,
+				 cur->terminates ? (const string*)dest : NULL);
 	size_t i;
 	WRITELIT("switch (s[");
 	WRITEI(out->index-1);
