@@ -98,6 +98,8 @@ void sort_level(struct trie* cur) {
 }
 
 void insert(struct trie* root, const char* s, size_t len) {
+	record(INFO, "Checking %.*s",
+		   (int)len, s);
 	void visit(struct trie* cur, size_t off) {
 		assert(off != len);
 		char c = s[off];
@@ -329,9 +331,6 @@ void dumptrie(struct output* out, struct trie* cur) {
 	void onelevel(struct trie* cur) {
 		if(!cur) return;
 		int len = 0;
-		if(cur->terminates) {
-			write(out->fd, "$", 1);
-		}
 		if(nobranches(cur, &len)) {
 			writething(out, "", 0);
 //		write(out->fd, "@", 1);
@@ -340,6 +339,9 @@ void dumptrie(struct output* out, struct trie* cur) {
 				if(cur->nsubs == 0) break;
 				cur = &cur->subs[0];
 			}
+			if(cur->terminates) {
+				writething(out, "$", 1);
+			}
 			NL();
 			return;
 		}
@@ -347,6 +349,9 @@ void dumptrie(struct output* out, struct trie* cur) {
 			writething(out, &cur->c, 1);
 		else
 			WRITELIT("\\0");
+		if(cur->terminates) {
+			writething(out, "$", 1);
+		}		
 		NL();
 		int i;
 		inclevel(out);
