@@ -254,7 +254,7 @@ void check_length(struct output* out, const string op, int level, const string* 
 		WRITELIT("if(length ");
 		WRITESTR(op);
 		WRITELIT(" ");
-		WRITEI(level);
+		WRITEI(level-1);
 		WRITELIT(")");
 		NL();
 		++out->level;
@@ -299,6 +299,7 @@ void addthingy() {
 
 // no branches, so just memcmp
 void dump_memcmp(struct output* out, struct slice dest, const string op) {
+	inclevel(out);
 	check_length(out, op, dest.len + out->index, NULL);
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
@@ -319,7 +320,6 @@ void dump_memcmp(struct output* out, struct slice dest, const string op) {
 	WRITEI(dest.len);
 	WRITELIT(")) {");
 	NL();
-	++out->level;
 }
 
 bool nobranches(struct trie* cur, int* len) {
@@ -387,6 +387,9 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	 i.e. aaaaone, aaaatwo, aaaathree etc*/
 	int num = 0;
 	struct trie* child = first_branch(cur, &num);
+	check_length(out, LITSTR("=="), out->index-1,
+				 cur->terminates ? (const string*)dest : NULL);
+
 	if(num > 2) {
 		int i;
 
@@ -413,14 +416,13 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			NL();
 			WRITELIT("}");
 			NL();
-			--out->level;
+			declevel(out);
 			return;
 		}
+		declevel(out);
 		out->index += num;
 	}
 
-	check_length(out, LITSTR("=="), out->index-1,
-				 cur->terminates ? (const string*)dest : NULL);
 	size_t i;
 	WRITELIT("switch (s[");
 	WRITEI(out->index-1);
