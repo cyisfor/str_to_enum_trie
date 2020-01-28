@@ -410,7 +410,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		if(out->index >= dest->len - 1) {
 			return;
 		}
-		if_memcmp(out, substringb(dest, out->index - 1, dest->len - out->index + 1 ));
+		if_memcmp(out, substringb(dest, out->index, dest->len - out->index));
 		if(cur->terminates) {
 			if_length(out, LITSTR("=="), dest->len );
 			WRITELIT("return ");
@@ -435,11 +435,11 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	NL();
 
 	for(i=0;i<cur->nsubs;++i) {
-		char c = cur->subs[i].c;
+		struct trie* sub = &cur->subs[i];
 #if 0
 		strreserve(dest, 1);
 		++dest->len;
-		dest->base[dest->len-1] = TOUPPER(c);
+		dest->base[dest->len-1] = TOUPPER(sub->c);
 #endif
 		// two cases for lower and upper sometimes
 		void onecasederp(char c) {
@@ -464,8 +464,8 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 				}
 			}
 		}
-		onecase(c);
-		if(cur->subs[i].nsubs == 0) {
+		onecase(sub->c);
+		if(sub->nsubs == 0) {
 			if_length(out, LITSTR("!="), dest->len);
 			WRITELIT("return ");
 			write_unknown(out);
@@ -478,10 +478,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			NL();
 		} else {
 			int len = 0;
-			if (nobranches(&cur->subs[i],&len)) {
+			if (nobranches(sub,&len)) {
 				if(len > 4) {
 					++out->level;
-					if(cur->nsubs == 0) {
+					if(sub->nsubs == 0) {
 						WRITELIT("return ");
 						write_enum_value(out, STRING(*dest));
 						WRITELIT(";");
@@ -495,14 +495,10 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 					continue;
 				}
 			}
-			if(cur->c) {
-				straddn(dest, &cur->c, 1);
-				inclevel(out);
-			}
-			dump_code(out, dest, &cur->subs[i]);
-			if(cur->c) {
-				declevel(out);
-			}
+			straddn(dest, &sub->c, 1);
+			inclevel(out);
+			dump_code(out, dest, sub);
+			declevel(out);
 		}
 		--dest->len;
 	}
