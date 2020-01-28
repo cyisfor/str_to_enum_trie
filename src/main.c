@@ -409,7 +409,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		NL();
 		end_bracket(out);
 		assert(out->index <= dest->len );
-		if_memcmp(out, substringb(dest, out->index - 1, dest->len - out->index + 1));
+		if_memcmp(out, substringb(dest, out->index, dest->len - out->index));
 		if(cur->terminates) {
 			if_length(out, LITSTR("=="), dest->len );
 			WRITELIT("return ");
@@ -439,11 +439,6 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		straddn(dest, &sub->c, 1);
 		inclevel(out);
 		
-#if 0
-		strreserve(dest, 1);
-		++dest->len;
-		dest->base[dest->len-1] = TOUPPER(sub->c);
-#endif
 		// two cases for lower and upper sometimes
 		void onecasederp(char c) {
 			WRITELIT("case '");
@@ -482,24 +477,20 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			NL();
 		} else {
 			int len = 0;
-			if (nobranches(sub,&len)) {
-				if(len > 4) {
-					++out->level;
-					if(sub->nsubs == 0) {
-						WRITELIT("return ");
-						write_enum_value(out, STRING(*dest));
-						WRITELIT(";");
-						NL();
-					} else {
-						/* 									&cur->subs[i].subs[0], */
-						WRITELIT("DERP");
-					}
-					--out->level;
-					--dest->len;
-					continue;
+			if (nobranches(sub,&len) && len > 4) {
+				++out->level;
+				if(sub->nsubs == 0) {
+					WRITELIT("return ");
+					write_enum_value(out, STRING(*dest));
+					WRITELIT(";");
+					NL();
+				} else {
+					/* 									&cur->subs[i].subs[0], */
+					WRITELIT("DERP");
 				}
+			} else {
+				dump_code(out, dest, sub);
 			}
-			dump_code(out, dest, sub);
 		}
 		declevel(out);
 		--dest->len;
