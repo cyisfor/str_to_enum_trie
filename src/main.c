@@ -495,9 +495,14 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 					continue;
 				}
 			}
-			inclevel(out);
+			if(cur->c) {
+				straddn(dest, &cur->c, 1);
+				inclevel(out);
+			}
 			dump_code(out, dest, &cur->subs[i]);
-			declevel(out);
+			if(cur->c) {
+				declevel(out);
+			}
 		}
 		--dest->len;
 	}
