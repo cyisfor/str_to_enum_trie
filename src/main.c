@@ -15,6 +15,20 @@
 #include <fcntl.h> // open O_*
 #include <libgen.h> // basename
 
+struct slice {
+	bstring* str;
+	size_t start;
+	size_t len;
+};
+
+const struct slice substringb(bstring* src, size_t start, size_t len) {
+	return (struct slice) {
+		.str = src,
+			.start = start,
+			.len = len
+			};
+}
+
 const string needenv(const char* name) {
 	const char* val = getenv(name);
 	if(val == NULL)
@@ -66,7 +80,7 @@ struct trie {
 int compare_nodes(struct trie* a, struct trie* b) {
 	return a->c - b->c;
 }
-	
+
 void sort_level(struct trie* cur) {
 	if(cur->nsubs == 0) return;
 
@@ -125,7 +139,7 @@ struct options {
 	const string enum_prefix;
 	const string prefix;
 	bstring filename;
-	
+
 	bool nullterm;
 	bool nocase;
 };
@@ -133,11 +147,21 @@ struct options {
 struct output {
 	int fd;
 	int level;
+	int index;
 	bool neednewline;
 	struct trie root;
-	
+
 	struct options options;
 };
+
+void inclevel(struct output* out) {
+	++out->level;
+	++out->index;
+}
+void declevel(struct output* out) {
+	--out->level;
+	--out->index;
+}
 
 void writething(struct output* self, const char* buf, size_t n) {
 	if(self->neednewline) {
@@ -168,6 +192,7 @@ void writei(struct output* out, int i) {
 #define WRITE(a,len) writething(out, a, len)
 #define WRITELIT(a) WRITE(a,sizeof(a)-1)
 #define WRITESTR(ss) WRITE((ss).base,(ss).len)
+#define WRITESLICE(ss) WRITE((ss).str->base + (ss).start, (ss).len)
 #define WRITEI(num) writei(out, num);
 
 char mytoupper(struct output* out, char c) {
@@ -215,25 +240,44 @@ void write_enum_values(struct output* out, struct trie* root) {
 	onelevel(root);
 }
 
-// no branches, so just memcmp
-void dump_memcmp(struct output* out, bstring* dest, struct trie* cur, int len) {
-	if(cur->nsubs == 0) {
-		WRITELIT("return ");
-		write_enum_value(out, STRING(*dest));
-		WRITELIT(";");
-		NL();
-		return;
-	}
+void check_length(struct output* out, const string op, int level) {
 	if(out->options.nullterm == false) {
-		WRITELIT("if(length != ");
-		WRITEI(len+1);
+		WRITELIT("if(length ");
+		WRITESTR(op);
+		WRITELIT(" ");
+		WRITEI(level);
 		WRITELIT(")");
 		NL();
-		WRITELIT("\treturn ");
+		++out->level;
+		WRITELIT("return ");
 		write_unknown(out);
 		WRITELIT(";");
 		NL();
+		--out->level;
 	}
+}
+
+#if 0
+void addthingy() {
+		int num = 0;
+	// add each character to the string, increasing num
+	while(cur && cur->c) {
+		WRITE(&cur->c,1);
+		++dest.len;
+		if(dest.start + dest.len >= dest.str->len) {
+			strreserve(dest.str, dest.start + dest.len + 1);
+			dest.str->len = dest.len + dest.start;
+		}
+		dest.str->base[dest.start+dest.len-1] = TOUPPER(cur->c);
+		++num;
+		cur = &cur->subs[0];
+	}
+}
+#endif
+
+// no branches, so just memcmp
+void dump_memcmp(struct output* out, struct slice dest, struct trie* cur, const string op) {
+	check_length(out, op, out->level);
 	if(!(out->options.nocase || out->options.nullterm)) {
 		// can use memcmp yay
 		WRITELIT("if(0==memcmp(&s[");
@@ -244,26 +288,19 @@ void dump_memcmp(struct output* out, bstring* dest, struct trie* cur, int len) {
 		// start at the address of character 'level'
 		WRITELIT("cmp(&s[");
 	}
-	WRITEI(out->level-1);
+	WRITESLICE(dest);
+	WRITEI(out->index-1);
 	WRITELIT("],\"");
-	int num = 0;
-	// add each character to the string, increasing num
-	while(cur && cur->c) {
-		WRITE(&cur->c,1);
-		strreserve(dest, 1);
-		dest->base[dest->len] = TOUPPER(cur->c);
-		++dest->len;
-		++num;
-		cur = &cur->subs[0];
-	}
+
 	WRITELIT("\", ");
 	// only strcmp up to num characters
 	WRITEI(num);
 	WRITELIT("))");
 	NL();
 	WRITELIT("\treturn ");
-	write_enum_value(out, STRING(*dest));
-	dest->len -= num;
+	write_enum_value(out, STRING(*dest.str));
+	dest.str->len -= num;
+	dest.len -= num;
 	WRITELIT(";");
 	NL();
 	WRITELIT("return ");
@@ -302,41 +339,79 @@ void dumptrie(struct output* out, struct trie* cur) {
 			WRITELIT("\\0");
 		NL();
 		int i;
-		++out->level;
+		inclevel(out);
 		for(i=0;i<cur->nsubs;++i) {
 			onelevel(&cur->subs[i]);
 		}
-		--out->level;
+		declevel(out);
 	}
 	onelevel(cur);
 	writething(out,"",0);
 }
 
-	
-void dump_code(struct output* out, bstring* dest, struct trie* cur) {
-	size_t i;
-	if(out->options.nullterm == false) {
-		WRITELIT("if(length == ");
-		WRITEI(out->level-1);
-		WRITELIT(")");
-		NL();
-		++out->level;
-		WRITELIT("return ");
-		write_unknown(out);
-		WRITELIT(";");
-		NL();
-		--out->level;
+struct trie* first_branch(struct trie* cur, int* num) {
+	if(!cur) return NULL;
+	if(cur->nsubs == 0) return NULL;
+	*num = 1;
+	while(cur->nsubs == 1) {
+		cur = &cur->subs[0];
+		++*num;
 	}
+	return cur;
+}
+
+
+void dump_code(struct output* out, bstring* dest, struct trie* cur) {
+	record(INFO, "Index dump code %d %.*s", out->index,
+		STRING_FOR_PRINTF(*dest));
+	/* first, try to check branches with many common prefixes
+	 i.e. aaaaone, aaaatwo, aaaathree etc*/
+	int num = 0;
+	struct trie* child = first_branch(cur, &num);
+	if(num > 2) {
+		int i;
+
+		for(i=0;i<num-1;++i) {
+			straddn(dest, &cur->c, 1);
+			assert(cur->nsubs == 1);
+			cur = &cur->subs[0];
+		}
+		straddn(dest, &cur->c, 1);
+		string op;
+		if(cur->nsubs > 0) {
+			op = LITSTR("<");
+		} else {
+			op = LITSTR("!=");
+		}
+		dump_memcmp(out,
+					substringb(dest, out->index + 1, dest->len - out->index - 1),
+					cur,
+					LITSTR("!="));
+		if(!cur) return;
+		if(cur->nsubs == 0) {
+			WRITELIT("return ");
+			write_enum_value(out, STRING(*dest));
+			WRITELIT(";");
+			NL();
+			return;
+		}
+		out->index += num;
+	}
+
+	check_length(out, LITSTR("=="), out->index-1);
+	size_t i;
 	WRITELIT("switch (s[");
-	WRITEI(out->level-1);
+	WRITEI(out->index-1);
 	WRITELIT("]) {");
 	NL();
-	
+
 	for(i=0;i<cur->nsubs;++i) {
 		char c = cur->subs[i].c;
+#if 0
 		strreserve(dest, 1);
 		++dest->len;
 		dest->base[dest->len-1] = TOUPPER(c);
+#endif
 		// two cases for lower and upper sometimes
 		void onecasederp(char c) {
 			WRITELIT("case '");
@@ -363,7 +438,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 		onecase(c);
 		if(cur->subs[i].nsubs == 0) {
 			WRITELIT("if(length != ");
-			WRITEI(out->level);
+			WRITEI(out->index+1);
 			WRITELIT(")");
 			NL();
 			++out->level;
@@ -381,12 +456,19 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 			int len = 0;
 			if (nobranches(&cur->subs[i],&len)) {
 				if(len > 4) {
-					++out->level;
-					dump_memcmp(out,
-								dest,
-								&cur->subs[i].subs[0],
-								len);
-					--out->level;
+					inclevel(out);
+					if(cur->nsubs == 0) {
+						WRITELIT("return ");
+						write_enum_value(out, STRING(*dest));
+						WRITELIT(";");
+						NL();
+					} else {
+						dump_memcmp(out,
+									substringb(dest,0,len),
+									&cur->subs[i].subs[0],
+									LITSTR("!="));
+					}
+					declevel(out);
 					--dest->len;
 					continue;
 				}
@@ -400,7 +482,7 @@ void dump_code(struct output* out, bstring* dest, struct trie* cur) {
 	WRITELIT("default:");
 	NL();
 	WRITELIT("\treturn ");
-	write_unknown(out);		
+	write_unknown(out);
 	WRITELIT(";");
 	NL();
 	WRITELIT("};");
@@ -450,10 +532,10 @@ void write_code(struct output* out) {
 	WRITELIT(") {");
 	NL();
 
-	++out->level;
+	inclevel(out);
 	bstring dest = {};
 	dump_code(out, &dest, &out->root);
-	--out->level;
+	declevel(out);
 	WRITELIT("}\n");
 }
 
@@ -478,7 +560,7 @@ int main(int argc, char *argv[])
 			   i.e. lookup_foo returns FOO_*
 			*/
 			.enum_prefix = maybeenv("enum"),
-			
+
 	/* null terminated strings don't have a length,
 		 but are terminated with a null
 		 that's... actually not all that inefficient
@@ -493,7 +575,7 @@ int main(int argc, char *argv[])
 	};
 
 	{
-		
+
 		/* What file are we generating?
 		   This is actually a template, where filename.c also produces
 		   a file called filename.h
@@ -509,7 +591,7 @@ int main(int argc, char *argv[])
 			straddn(&out.options.filename, filename.base, filename.len);
 		}
 	}
-	
+
 	struct stat winfo;
 	assert(0==fstat(0,&winfo));
 	char* src = mmap(NULL,winfo.st_size,PROT_READ,MAP_PRIVATE,0,0);
@@ -575,20 +657,20 @@ int main(int argc, char *argv[])
 		 -> aabaacabc add separators if at top
 	*/
 
-#if 0	
+#if 0
 	out.fd = 2;
 	dumptrie(&out, &out.root);
 #endif
-	
+
 	char tname[] = ".tmpXXXXXX";
 	out.fd = mkstemp(tname);
 	assert(out.fd >= 0);
 	write_header(&out);
 	close(out.fd);
-	
+
 	out.options.filename.base[out.options.filename.len-1] = 'h'; // blah.gen.h
 	rename(tname,out.options.filename.base);
-	
+
 	out.fd = open(tname,O_WRONLY|O_CREAT|O_TRUNC,0644);
 	assert(out.fd >= 0);
 	write_code(&out);
